@@ -1,0 +1,154 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "koredump.fullname" . }}-ds
+  labels:
+    {{- include "koredump.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "koredump.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        koredump.daemonset: "1"
+        {{- include "koredump.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "koredump.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: init-{{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          volumeMounts:
+            - mountPath: /target
+              name: usr-local-bin
+          command: ["/bin/cp", "/usr/bin/koredumpctl", "/target/koredumpctl"]
+      containers:
+        - name: restapi
+          securityContext:
+            {{- toYaml .Values.securityContext.daemonset | nindent 12 }}
+          image: "{{ .Values.image.repository }}-ds:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: FLASK_DEBUG
+              value: "{{ .Values.flaskDebug }}"
+            - name: HOST
+              value: "0"
+            - name: PORT
+              value: "{{ .Values.ports.daemonSet }}"
+            - name: DAEMONSET
+              value: "1"
+            - name: USE_TOKENS
+              value: {{ if .Values.adminToken }} "1" {{ else }} "0" {{ end }}
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp-volume
+            - mountPath: /koredump
+              name: koredump-volume
+            - mountPath: /var/lib/systemd/coredump
+              name: var-lib-systemd-coredump
+              readOnly: true
+            {{ if .Values.adminToken }}
+            - mountPath: /run/secrets/koredump
+              name: secret-tokens
+              readOnly: true
+            {{ end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.ports.daemonSet }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+        - name: koremonitor
+          securityContext:
+            {{- toYaml .Values.securityContext.daemonset | nindent 12 }}
+          image: "{{ .Values.image.repository }}-ds:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/usr/bin/koremonitor.py"]
+          env:
+            - name: KOREDUMP_MY_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp-volume
+            - mountPath: /koredump
+              name: koredump-volume
+            - mountPath: /var/lib/systemd/coredump
+              name: var-lib-systemd-coredump
+              readOnly: true
+            - mountPath: /var/log/journal
+              name: var-log-journal
+              readOnly: true
+            - mountPath: /etc/machine-id
+              name: machine-id
+              readOnly: true
+            - mountPath: /run/containers
+              name: run-containers
+              readOnly: true
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.runOnControlPlaneNodes }}
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      {{- end }}
+      volumes:
+        - name: tmp-volume
+          emptyDir:
+            medium: Memory
+        - name: koredump-volume
+          emptyDir: {}
+        - name: var-lib-systemd-coredump
+          hostPath:
+            path: /var/lib/systemd/coredump
+            type: Directory
+        - name: var-log-journal
+          hostPath:
+            path: /var/log/journal
+            type: Directory
+        - name: machine-id
+          hostPath:
+            path: /etc/machine-id
+            type: File
+        - name: run-containers
+          hostPath:
+            path: /run/containers
+            type: DirectoryOrCreate
+        {{ if .Values.adminToken }}
+        - name: secret-tokens
+          secret:
+            secretName: secret-tokens
+        {{ end }}
+        # Install copy of koredumpctl into host /usr/local/bin
+        - name: usr-local-bin
+          hostPath:
+            path: /usr/local/bin
+            type: DirectoryOrCreate

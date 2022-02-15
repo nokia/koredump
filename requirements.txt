@@ -1,0 +1,6 @@
+flask
+kubernetes
+pyinotify
+pyxattr
+PyYAML
+systemd-python

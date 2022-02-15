@@ -1,0 +1,9 @@
+# Copyright (C) 2022 Nokia
+# Licensed under the MIT License
+# SPDX-License-Identifier: MIT
+
+ARG BASE_IMAGE
+FROM $BASE_IMAGE
+
+# Needed to access core dump files and journal logs as non-root user.
+RUN setcap cap_dac_override+eip /usr/bin/python3.10

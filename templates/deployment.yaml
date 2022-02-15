@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "koredump.fullname" . }}-api
+  labels:
+    {{- include "koredump.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "koredump.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        koredump.service: "1"
+        {{- include "koredump.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "koredump.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: restapi
+          securityContext:
+            {{- toYaml .Values.securityContext.restApi | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: FLASK_DEBUG
+              value: "{{ .Values.flaskDebug }}"
+            - name: HOST
+              value: "0"
+            - name: PORT
+              value: "{{ .Values.ports.service }}"
+            - name: KOREDUMP_DAEMONSET_PORT
+              value: "{{ .Values.ports.daemonSet }}"
+            - name: USE_TOKENS
+              value: {{ if .Values.adminToken }} "1" {{ else }} "0" {{ end }}
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp-volume
+            {{ if .Values.adminToken }}
+            - mountPath: /run/secrets/koredump
+              name: secret-tokens
+              readOnly: true
+            {{ end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.ports.service }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: tmp-volume
+          emptyDir:
+            medium: Memory
+        {{ if .Values.adminToken }}
+        - name: secret-tokens
+          secret:
+            secretName: secret-tokens
+        {{ end }}
