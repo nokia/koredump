@@ -2,4 +2,3 @@ core.*
 index.yaml*
 koredump-*.tgz
 koredump-*.tar.gz
-rpms/
