@@ -9,9 +9,8 @@ RUN dnf upgrade -y --setopt=install_weak_deps=0 && dnf clean all
 
 # Build RPMs
 FROM base AS builder
-ARG VER
 RUN dnf install -y --setopt=install_weak_deps=0 dnf-plugins-core rpm-build
-COPY koredump-${VER}.tar.gz /rpmbuild/SOURCES/
+COPY app.py koredumpctl koremonitor.py LICENSE README.md /rpmbuild/SOURCES/
 COPY koredump.spec /rpmbuild/SPECS/
 RUN dnf builddep -y --setopt=install_weak_deps=0 --spec /rpmbuild/SPECS/koredump.spec
 RUN rpmbuild --define "_topdir /rpmbuild" -ba /rpmbuild/SPECS/koredump.spec
@@ -39,5 +38,9 @@ COPY requirements.txt /koredump/
 RUN pip3 install --disable-pip-version-check $PYPI_INDEX_URL -r /koredump/requirements.txt \
     && rm /koredump/requirements.txt \
     && dnf remove -y python3-pip
+
+LABEL maintainer="tommi.t.rantala@nokia.com"
+LABEL org.opencontainers.image.url="https://github.com/nokia/koredump"
+LABEL org.opencontainers.image.vendor="Nokia"
 
 CMD ["/usr/bin/gunicorn", "--chdir=/usr/libexec/koredump", "app"]

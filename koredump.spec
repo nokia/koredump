@@ -9,7 +9,12 @@ Summary:        Kubernetes coredump REST API
 
 License:        MIT
 URL:            https://github.com/nokia/koredump
-Source0:        %{url}/archive/%{name}-%{version}.tar.gz
+
+Source0:        app.py
+Source1:        koremonitor.py
+Source2:        koredumpctl
+Source3:        LICENSE
+Source4:        README.md
 
 Requires:       python3-cachetools
 Requires:       python3-certifi
@@ -50,7 +55,7 @@ Kubernetes coredump REST API utilities.
 
 
 %prep
-%autosetup -p1
+cp %{SOURCE0} %{SOURCE1} %{SOURCE2} %{SOURCE3} %{SOURCE4} .
 sed -i -e "s/^version=.*/version=%{version}/" koredumpctl
 
 
