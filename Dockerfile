@@ -2,7 +2,7 @@
 # Licensed under the MIT License
 # SPDX-License-Identifier: MIT
 
-ARG BASE_IMAGE=fedora:35
+ARG BASE_IMAGE=quay.io/fedora/fedora:35
 FROM $BASE_IMAGE AS base
 RUN sed -i -e 's|enabled=1|enabled=0|' /etc/yum.repos.d/fedora-{cisco-openh264,modular,updates-modular,updates-testing,updates-testing-modular}.repo
 RUN dnf upgrade -y --setopt=install_weak_deps=0 && dnf clean all
