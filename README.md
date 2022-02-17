@@ -16,7 +16,7 @@ This project implements REST API for accessing coredumps in Kubernetes cluster.
 ## Limitations
 
 - OCP `privileged` [Security Context Constraint (SCC)](https://docs.openshift.com/container-platform/4.9/authentication/managing-security-context-constraints.html) is needed.
-- Collects all coredumps in cluster (should limit to Nokia coredumps only).
+- Collects all coredumps in cluster (in the future, we may offer way to limit coredump collection for example to predefined namespaces only).
 - Optional hardcoded token authentication (`adminToken` in `values.yaml`).
 - In-cluster traffic is unencrypted HTTP.
 - Simple implementation with python3.
