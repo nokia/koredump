@@ -171,7 +171,7 @@ Install from git repository:
 git clone https://github.com/nokia/koredump.git
 cd koredump
 oc new-project koredump
-helm install koredump .
+helm install koredump charts/koredump/
 watch kubectl get all
 ```
 
