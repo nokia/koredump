@@ -43,4 +43,8 @@ LABEL maintainer="tommi.t.rantala@nokia.com"
 LABEL org.opencontainers.image.url="https://github.com/nokia/koredump"
 LABEL org.opencontainers.image.vendor="Nokia"
 
+LABEL license="MIT"
+LABEL name="koredump"
+LABEL vendor="Nokia"
+
 CMD ["/usr/bin/gunicorn", "--chdir=/usr/libexec/koredump", "app"]
