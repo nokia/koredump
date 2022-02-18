@@ -8,6 +8,10 @@ description: Coredump REST API
 icon: https://www.nokia.com/sites/default/files/styles/scale_1920_no_crop/public/media/nokia_white_logo.png
 type: application
 home: https://github.com/nokia/koredump
+maintainers:
+  - name: rantala
+    email: tommi.t.rantala@nokia.com
+    url: https://github.com/rantala/
 
 # This is the chart version. This version number should be incremented each time you make changes
 # to the chart and its templates, including the app version.
