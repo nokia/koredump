@@ -16,7 +16,7 @@ if ! type jq &>/dev/null; then echo
 	exit 1
 fi
 
-HELM_CHART_URL=""
+HELM_CHART_URL="https://nokia.github.io/koredump/"
 
 red=$(tput setaf 1)
 green=$(tput setaf 2)
