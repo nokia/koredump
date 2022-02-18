@@ -39,6 +39,11 @@ RUN pip3 install --disable-pip-version-check $PYPI_INDEX_URL -r /koredump/requir
     && rm /koredump/requirements.txt \
     && dnf remove -y python3-pip
 
+# Special copy of python3 executable with CAP_DAC_OVERRIDE, needed in DaemonSet
+# containers to access core dump files and journal logs as non-root user.
+RUN install --mode=0550 --group=koredump /usr/bin/python3 /usr/libexec/koredump/python3 \
+    && setcap cap_dac_override+eip /usr/libexec/koredump/python3
+
 LABEL maintainer="tommi.t.rantala@nokia.com"
 LABEL org.opencontainers.image.url="https://github.com/nokia/koredump"
 LABEL org.opencontainers.image.vendor="Nokia"
@@ -46,5 +51,3 @@ LABEL org.opencontainers.image.vendor="Nokia"
 LABEL license="MIT"
 LABEL name="koredump"
 LABEL vendor="Nokia"
-
-CMD ["/usr/bin/gunicorn", "--chdir=/usr/libexec/koredump", "app"]

@@ -31,13 +31,16 @@ spec:
           volumeMounts:
             - mountPath: /target
               name: usr-local-bin
-          command: ["/bin/cp", "/usr/bin/koredumpctl", "/target/koredumpctl"]
+          command: ["/bin/cp"]
+          args: ["/usr/bin/koredumpctl", "/target/koredumpctl"]
       containers:
         - name: restapi
           securityContext:
             {{- toYaml .Values.securityContext.daemonset | nindent 12 }}
-          image: "{{ .Values.image.repository }}-ds:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/usr/libexec/koredump/python3"]
+          args: ["/usr/bin/gunicorn", "--chdir=/usr/libexec/koredump", "app"]
           env:
             - name: FLASK_DEBUG
               value: "{{ .Values.flaskDebug }}"
@@ -79,9 +82,10 @@ spec:
         - name: koremonitor
           securityContext:
             {{- toYaml .Values.securityContext.daemonset | nindent 12 }}
-          image: "{{ .Values.image.repository }}-ds:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["/usr/bin/koremonitor.py"]
+          command: ["/usr/libexec/koredump/python3"]
+          args: ["/usr/bin/koremonitor.py"]
           env:
             - name: KOREDUMP_MY_NODE_NAME
               valueFrom:
