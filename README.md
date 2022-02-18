@@ -2,10 +2,10 @@
 
 This project implements REST API for accessing coredumps in Kubernetes cluster.
 
-Install (in OCP as `core` user):
+Install (in Red Hat OCP as `core` user):
 ```bash
 oc new-project koredump
-helm repo add koredump ...
+helm repo add koredump https://nokia.github.io/koredump/
 helm repo update
 helm install -n koredump koredump koredump/koredump
 watch kubectl -n koredump get all
