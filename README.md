@@ -15,7 +15,7 @@ This project implements REST API for accessing coredumps in Kubernetes cluster.
 
 ## Limitations
 
-- OCP `privileged` [Security Context Constraint (SCC)](https://docs.openshift.com/container-platform/4.9/authentication/managing-security-context-constraints.html) is needed.
+- Red Hat OCP `privileged` [Security Context Constraint (SCC)](https://docs.openshift.com/container-platform/4.9/authentication/managing-security-context-constraints.html) is needed.
 - Collects all coredumps in cluster (in the future, we may offer way to limit coredump collection for example to predefined namespaces only).
 - Optional hardcoded token authentication (`adminToken` in `values.yaml`).
 - In-cluster traffic is unencrypted HTTP.
@@ -107,17 +107,17 @@ bash-5.1$ curl -fvsS -O koreapi/apiv1/cores/download/ocp-example/core.example.99
 </pre>
 </details>
 
-## Install and run in OCP
+## Install and run in Red Hat OCP
 
 Generate coredump (should be then visible in `coredumpctl` output):
 ```bash
 kubectl run -it segfaulter --image=quay.io/icdh/segfaulter --restart=Never
 ```
 
-Install (in OCP as `core` user):
+Install (in Red Hat OCP as `core` user):
 ```bash
 oc new-project koredump
-helm repo add koredump ...
+helm repo add koredump https://nokia.github.io/koredump/
 helm repo update
 helm install -n koredump koredump koredump/koredump
 watch kubectl -n koredump get all
