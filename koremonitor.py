@@ -312,6 +312,9 @@ if __name__ == "__main__":
         datefmt="%H:%M:%S",
     )
     koremonitor = KoreMonitor()
+    if not os.path.exists(koremonitor.systemd_corepath):
+        logging.critical("Monitoring path does not exist: %s", koremonitor.systemd_corepath)
+        exit(1)
     koremonitor.load_index_json()
     watch_manager = pyinotify.WatchManager()
     event_notifier = pyinotify.Notifier(watch_manager, koremonitor)
