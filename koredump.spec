@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 Name:           koredump
-Version:        0.3.1
+Version:        0.3.2
 Release:        1%{?dist}
 Summary:        Kubernetes coredump REST API
 
