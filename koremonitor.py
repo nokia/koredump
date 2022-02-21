@@ -48,6 +48,8 @@ class KoreMonitor(pyinotify.ProcessEvent):
             with open(index_path) as fp:
                 ret = json.load(fp)
             self.logger.info("Read %d cores from %s", len(ret), index_path)
+            for core_id in ret:
+                self.logger.debug("%s", core_id)
             return ret
         except json.JSONDecodeError as ex:
             self.logger.warning("JSON error %s: %s", index_path, ex)
