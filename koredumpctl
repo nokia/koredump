@@ -136,6 +136,7 @@ function cmd_list {
 		+ "  Pod: " + .pod + "\n"
 		+ "  Container: " + .container + "\n"
 		+ "  Namespace: " + .namespace + "\n"
+		+ "  Image: " + .image_name + "\n"
 		+ "  Signal: " + .COREDUMP_SIGNAL_NAME + " (\( .COREDUMP_SIGNAL // "" ))\n"
 		+ "  Timestamp: " + .COREDUMP_TIMESTAMP'
 	if [ "$flag_1" ]; then
