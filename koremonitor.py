@@ -15,8 +15,8 @@ import os
 import re
 import signal
 import sys
-from datetime import datetime
 import time
+from datetime import datetime
 
 import pyinotify
 import xattr
@@ -329,7 +329,9 @@ if __name__ == "__main__":
     )
     koremonitor = KoreMonitor()
     if not os.path.exists(koremonitor.systemd_corepath):
-        logging.critical("Monitoring path does not exist: %s", koremonitor.systemd_corepath)
+        logging.critical(
+            "Monitoring path does not exist: %s", koremonitor.systemd_corepath
+        )
         exit(1)
     koremonitor.load_index_json()
     watch_manager = pyinotify.WatchManager()
