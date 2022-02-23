@@ -53,6 +53,12 @@ tokens_yaml = "/run/secrets/koredump/tokens.yaml"
 cores = {}
 cores_stat = None
 
+decompression_methods = {
+    ".lz4": ["lz4", "-c", "-q", "-d"],
+    ".xz": ["xz", "-c", "-q", "-d"],
+    ".zst": ["zstd", "-c", "-q", "-d"],
+}
+
 
 @auth.verify_token
 def verify_token(token):
@@ -197,38 +203,28 @@ if app.config["DAEMONSET"]:
         read_cores()
         if core_id not in cores or "_DELETED" in cores[core_id]:
             abort(404)
-        if request.args.get("decompress") == "true" and (
-            core_id.endswith(".lz4")
-            or core_id.endswith(".xz")
-            or core_id.endswith(".zst")
-        ):
-            core_path = os.path.join(cores[core_id]["_core_dir"], core_id)
-            app.logger.debug(f"decompress requested: {core_path}")
-            fp = open(core_path, "rb")
-            if core_id.endswith(".lz4"):
-                process = subprocess.Popen(
-                    ["lz4", "-c", "-q", "-d"], stdin=fp, stdout=subprocess.PIPE
-                )
-                download_name = core_id.removesuffix(".lz4")
-            elif core_id.endswith(".xz"):
-                process = subprocess.Popen(
-                    ["xz", "-c", "-q", "-d"], stdin=fp, stdout=subprocess.PIPE
-                )
-                download_name = core_id.removesuffix(".xz")
-            elif core_id.endswith(".zst"):
-                process = subprocess.Popen(
-                    ["zstd", "-c", "-q", "-d"], stdin=fp, stdout=subprocess.PIPE
-                )
-                download_name = core_id.removesuffix(".zst")
-            else:
-                abort(500)
-            app.logger.debug("%s", process)
-            return send_file(
-                process.stdout, as_attachment=True, download_name=download_name
+        if request.args.get("decompress") != "true":
+            return send_from_directory(
+                cores[core_id]["_core_dir"], core_id, as_attachment=True
             )
-        return send_from_directory(
-            cores[core_id]["_core_dir"], core_id, as_attachment=True
-        )
+
+        (download_name, ext) = os.path.splitext(core_id)
+        if ext not in decompression_methods:
+            abort(415)
+
+        core_path = os.path.join(cores[core_id]["_core_dir"], core_id)
+        app.logger.debug(f"decompress requested: {core_path}")
+        try:
+            with open(core_path, "rb") as fp:
+                process = subprocess.Popen(
+                    decompression_methods[ext], stdin=fp, stdout=subprocess.PIPE
+                )
+                app.logger.debug("%s", process)
+                return send_file(
+                    process.stdout, as_attachment=True, download_name=download_name
+                )
+        except FileNotFoundError:
+            abort(404)
 
     @app.delete("/apiv1/cores/delete/<string:core_id>")
     @auth.login_required
