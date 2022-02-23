@@ -136,26 +136,25 @@ koredumpctl status
 koredumpctl list
 ```
 
-Example in-cluster execution of `koredumpctl`:
+Example `koredumpctl list` output:
 ```
-$ kubectl exec $(kubectl get pods -l koredump.service=1 -o jsonpath='{ .items[0].metadata.name }') -- koredumpctl --token="$(grep -m1 adminToken values.yaml | cut -d: -f2-)" list
-- ID: core.certcmnmsactiva.0.e36680b3d32e4f4f9899d72d34fe5fb3.207856.1638186984000000.lz4
-  Node: ocp-vdu-6
-  Pod: po-cran1-oam-0
-  Container: ctr-cran1-oam
-- ID: core.stunnel.9999.0f1f04103e4243a48a415de9631a8490.129258.1639033062000000.lz4
-  Node: ocp-vdu-6
-  Pod: po-cran1-securestorage-0
+$ koredumpctl list
+- ID: core.prog.0.e36680b3d32e4f4f9899d72d34fe5fb3.207856.1638186984000000.lz4
+  Node: ocp-6
+  Pod: po-prog-oam-0
+  Container: ctr-prog
+  Namespace: demo
+  Image: image-registry.openshift-image-registry.svc:5000/demo/prog:1.2.0
+  Signal: SIGXCPU (24)
+  Timestamp: 2022-02-23T08:23:16Z
+- ID: core.stunnel.9999.29162cb2ca0d4e1eb67a4ffb549ed670.2354652.1645604596000000.lz4
+  Node: ocp-6
+  Pod: po-cran1-stunnel-d897f48fd-8q68m
   Container: ctr-cran1-stunnel
-```
-
-Example from Fedora 34 + Docker + k8s environment:
-```
-$ ./koredumpctl list
-- ID: core.segfaulter.1000.017e7b9be1db42099f82681390bc9894.1150585.1639032219000000.zst
-  Node: laptop
-  Pod: segfaulter
-  Container:
+  Namespace: demo
+  Image: image-registry.openshift-image-registry.svc:5000/demo/stunnel:2.4.0
+  Signal: SIGXCPU (24)
+  Timestamp: 2022-02-23T08:23:16Z
 ```
 
 Uninstall:
