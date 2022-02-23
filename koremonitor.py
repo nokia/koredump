@@ -15,6 +15,7 @@ import os
 import re
 import signal
 import sys
+import time
 from datetime import datetime
 
 import pyinotify
@@ -48,6 +49,8 @@ class KoreMonitor(pyinotify.ProcessEvent):
             with open(index_path) as fp:
                 ret = json.load(fp)
             self.logger.info("Read %d cores from %s", len(ret), index_path)
+            for core_id in ret:
+                self.logger.debug("%s", core_id)
             return ret
         except json.JSONDecodeError as ex:
             self.logger.warning("JSON error %s: %s", index_path, ex)
@@ -95,13 +98,17 @@ class KoreMonitor(pyinotify.ProcessEvent):
                 self.logger.error(k, v)
         return entry
 
-    def read_journal(self, core_path):
-        """Read systemd-coredump metadata for given core, from journal."""
+    def read_journal(self, core_path) -> bool:
+        """
+        Read systemd-coredump metadata for given core, from journal.
+        Return true if entry found from journal.
+        """
         journal_reader = journal.Reader()
         journal_reader.add_match(
             "MESSAGE_ID=fc2e22bc6ee647b6b90729ab34a250b1",
             f"COREDUMP_FILENAME={core_path}",
         )
+        found = False
         for entry in journal_reader:
             core_id = os.path.basename(entry["COREDUMP_FILENAME"])
             if not core_id:
@@ -114,6 +121,8 @@ class KoreMonitor(pyinotify.ProcessEvent):
                 core_id,
                 len(self.cores[core_id]),
             )
+            found = True
+        return found
 
     def read_systemd_xattrs(self, core_id, core_path):
         """
@@ -186,7 +195,14 @@ class KoreMonitor(pyinotify.ProcessEvent):
                     "_systemd_coredump": True,
                     "_core_dir": self.systemd_corepath,
                 }
-                self.read_journal(core_path)
+
+                # Retry a few times, wait for systemd-coredump journal entries to become available.
+                retry = 10
+                while retry > 0:
+                    if self.read_journal(core_path):
+                        break
+                    retry -= 1
+                    time.sleep(0.05)
                 self.read_systemd_xattrs(core_id, core_path)
 
         except Exception as ex:
@@ -313,7 +329,9 @@ if __name__ == "__main__":
     )
     koremonitor = KoreMonitor()
     if not os.path.exists(koremonitor.systemd_corepath):
-        logging.critical("Monitoring path does not exist: %s", koremonitor.systemd_corepath)
+        logging.critical(
+            "Monitoring path does not exist: %s", koremonitor.systemd_corepath
+        )
         exit(1)
     koremonitor.load_index_json()
     watch_manager = pyinotify.WatchManager()

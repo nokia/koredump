@@ -16,7 +16,7 @@ if ! type jq &>/dev/null; then echo
 	exit 1
 fi
 
-HELM_CHART_URL=""
+HELM_CHART_URL="https://nokia.github.io/koredump/"
 
 red=$(tput setaf 1)
 green=$(tput setaf 2)
@@ -136,6 +136,7 @@ function cmd_list {
 		+ "  Pod: " + .pod + "\n"
 		+ "  Container: " + .container + "\n"
 		+ "  Namespace: " + .namespace + "\n"
+		+ "  Image: " + .image_name + "\n"
 		+ "  Signal: " + .COREDUMP_SIGNAL_NAME + " (\( .COREDUMP_SIGNAL // "" ))\n"
 		+ "  Timestamp: " + .COREDUMP_TIMESTAMP'
 	if [ "$flag_1" ]; then
@@ -299,7 +300,7 @@ function cmd_status {
 		if [ "$msg" ]; then printf "  %s\n" "$msg"; fi
 		echo
 	fi
-	printf "%s\n" "${bold}/proc/sys/kernel/core_pattern:${reset}"
+	printf "%s\n" "${bold}/proc/sys/kernel/core_pattern [HOSTNAME=${HOSTNAME}]:${reset}"
 	read -r core_pattern < /proc/sys/kernel/core_pattern
 	if echo "$core_pattern" | grep -q "^|/usr/lib/systemd/systemd-coredump"; then
 		printf "  %s\n" "${green}${core_pattern}${reset}"
