@@ -5,7 +5,7 @@
 replicaCount: 1
 
 image:
-  repository: quay.io/rantala/koredump
+  repository: ghcr.io/nokia/koredump
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
