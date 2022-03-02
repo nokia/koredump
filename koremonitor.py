@@ -233,12 +233,42 @@ class KoreMonitor(pyinotify.ProcessEvent):
                     self.cores[core_id]["COREDUMP_CONTAINER_CMDLINE"],
                 ):
                     self.cores[core_id]["container"] = match.group(1)
+
+                if match := re.match(
+                    r"/usr/bin/conmon .* -n (\S+)",
+                    self.cores[core_id]["COREDUMP_CONTAINER_CMDLINE"],
+                ):
+                    name = match.group(1)
+                    if name.startswith("k8s_"):
+                        # Example: "-n k8s_console_console-84d757d6d8-2ppt5_openshift-console_4b9fafec-fa78-4274-ae14-6274f248a859_642"
+                        #  0: k8s
+                        #  1: console                                  # container
+                        #  2: console-84d757d6d8-2ppt5                 # pod
+                        #  3: openshift-console                        # namespace
+                        #  4: 4b9fafec-fa78-4274-ae14-6274f248a859     # uid
+                        #  5: 642                                      # restarts
+                        #
+                        split = name.split("_")
+                        if len(split) == 6:
+                            if "container" not in self.cores[core_id] and split[1]:
+                                self.cores[core_id]["container"] = split[1]
+                            if "pod" not in self.cores[core_id] and split[2]:
+                                self.cores[core_id]["pod"] = split[2]
+                            if "namespace" not in self.cores[core_id] and split[3]:
+                                self.cores[core_id]["namespace"] = split[3]
+                    else:
+                        self.cores[core_id]["container"] = name
+
                 if "_HOSTNAME" in self.cores[core_id]:
                     self.cores[core_id]["node"] = self.cores[core_id]["_HOSTNAME"]
-                if "COREDUMP_HOSTNAME" in self.cores[core_id]:
+                if (
+                    "pod" not in self.cores[core_id]
+                    and "COREDUMP_HOSTNAME" in self.cores[core_id]
+                ):
                     self.cores[core_id]["pod"] = self.cores[core_id][
                         "COREDUMP_HOSTNAME"
                     ]
+
                 if match := re.match(
                     "/usr/bin/conmon .*-b (/run/containers/storage/overlay-containers/[0-9a-fA-F]+/userdata)",
                     self.cores[core_id]["COREDUMP_CONTAINER_CMDLINE"],
@@ -250,11 +280,13 @@ class KoreMonitor(pyinotify.ProcessEvent):
                         self.cores[core_id]["image_name"] = self.cores[core_id]["crio"][
                             "annotations"
                         ]["io.kubernetes.cri-o.ImageName"]
-                        self.cores[core_id]["namespace"] = self.cores[core_id]["crio"][
-                            "annotations"
-                        ]["io.kubernetes.pod.namespace"]
+                        if "namespace" not in self.cores[core_id]:
+                            self.cores[core_id]["namespace"] = self.cores[core_id][
+                                "crio"
+                            ]["annotations"]["io.kubernetes.pod.namespace"]
                     except Exception as ex:
                         self.logger.debug("CRI-O config.json exception: %s", ex)
+
             else:
                 # Assume the process was not running in container.
                 if "_HOSTNAME" in self.cores[core_id]:

@@ -45,8 +45,6 @@ RUN install --mode=0550 --group=koredump /usr/bin/python3 /usr/libexec/koredump/
     && setcap cap_dac_override+eip /usr/libexec/koredump/python3
 
 LABEL maintainer="tommi.t.rantala@nokia.com"
-LABEL org.opencontainers.image.url="https://github.com/nokia/koredump"
-LABEL org.opencontainers.image.vendor="Nokia"
 
 LABEL license="MIT"
 LABEL name="koredump"
