@@ -7,11 +7,11 @@ if [ "$1" = "-x" ]; then
 	set -x
 	shift
 fi
-if ! type curl &>/dev/null; then echo
+if ! type curl &>/dev/null; then
 	echo "Error: missing curl" >&2
 	exit 1
 fi
-if ! type jq &>/dev/null; then echo
+if ! type jq &>/dev/null; then
 	echo "Error: missing jq" >&2
 	exit 1
 fi
@@ -24,13 +24,13 @@ yellow=$(tput setaf 3)
 bold=$(tput bold)
 reset=$(tput sgr0)
 
-version=  # Filled on install.
+version= # Filled on install.
 token=
-flag_1=   # latest core
-flag_a=   # all cores
-flag_n=   # namespace
-flag_p=   # pod
-flag_d=   # uncompressed cores
+flag_1= # latest core
+flag_a= # all cores
+flag_n= # namespace
+flag_p= # pod
+flag_d= # uncompressed cores
 verbose=
 
 if [ "$KUBERNETES_SERVICE_HOST" ]; then
@@ -68,7 +68,7 @@ function kubectl_port_fwd {
 			break
 		fi
 		if [ "$verbose" ]; then echo "Port $port already open [cnt=$cnt]." >&2; fi
-		cnt=$((cnt-1))
+		cnt=$((cnt - 1))
 		port=""
 	done
 	if [ -z "$port" ]; then
@@ -94,7 +94,7 @@ function kubectl_port_fwd {
 	local cnt=30
 	until ss -H -o -t -4 -l -n sport = "$port" 2>/dev/null | grep -F -q "$port"; do
 		sleep 0.1 || true
-		cnt=$((cnt-1))
+		cnt=$((cnt - 1))
 		if [ $cnt -le 0 ]; then
 			break
 		fi
@@ -169,7 +169,7 @@ function get_core {
 	# shellcheck disable=SC2086
 	js=$(curl --proxy "" $verbose --retry 3 -f -s -S -H "$token_header" \
 		"${server}/apiv1/cores/metadata/${node}/${core_id}")
-	echo "$js" | jq > "$metafile"
+	echo "$js" | jq >"$metafile"
 	size=$(stat -c "%s" "$metafile")
 	if [ "$size" = "0" ]; then
 		rm "$metafile" || true
@@ -229,7 +229,7 @@ function cmd_get {
 			fi
 			if ! get_core "$node" "$core_id"; then
 				printf "%s\n" "${red}Error downloading: ${node} ${core_id}${reset}" >&2
-				failcnt=$((failcnt+1))
+				failcnt=$((failcnt + 1))
 			fi
 		done
 		if [ $failcnt -ge 0 ]; then
@@ -301,7 +301,7 @@ function cmd_status {
 		echo
 	fi
 	printf "%s\n" "${bold}/proc/sys/kernel/core_pattern [HOSTNAME=${HOSTNAME}]:${reset}"
-	read -r core_pattern < /proc/sys/kernel/core_pattern
+	read -r core_pattern </proc/sys/kernel/core_pattern
 	if echo "$core_pattern" | grep -q "^|/usr/lib/systemd/systemd-coredump"; then
 		printf "  %s\n" "${green}${core_pattern}${reset}"
 	else
@@ -338,13 +338,13 @@ function usage {
 	echo "  # List all cores"
 	echo "  $cmd list"
 	echo
-	echo "  # List cores matching namespace \"default\""
+	echo "  # List cores matching namespace default"
 	echo "  $cmd list -n default"
 	echo
 	echo "  # Get all cores"
 	echo "  $cmd get -a"
 	echo
-	echo "  # Get all cores matching namespace \"default\""
+	echo "  # Get all cores matching namespace default"
 	echo "  $cmd get -a -n default"
 	echo
 	echo "  # Status"
@@ -357,7 +357,7 @@ function usage {
 }
 
 opts=$(getopt --longoptions "help,token:,namespace:,pod:" \
-                --options "1ado:vhn:p:" --name "$(basename "$0")" -- "$@")
+	--options "1ado:vhn:p:" --name "$(basename "$0")" -- "$@")
 eval set -- "$opts"
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -373,7 +373,7 @@ while [[ $# -gt 0 ]]; do
 		flag_d="true"
 		shift
 		;;
-	-n|--namespace)
+	-n | --namespace)
 		flag_n="$2"
 		shift 2
 		;;
@@ -381,7 +381,7 @@ while [[ $# -gt 0 ]]; do
 		output="$2"
 		shift 2
 		;;
-	-p|--pod)
+	-p | --pod)
 		flag_p="$2"
 		shift 2
 		;;
@@ -393,7 +393,7 @@ while [[ $# -gt 0 ]]; do
 		token="$2"
 		shift 2
 		;;
-	-h|--help)
+	-h | --help)
 		usage
 		exit 0
 		;;
