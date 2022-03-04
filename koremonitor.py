@@ -120,6 +120,8 @@ class KoreMonitor(pyinotify.ProcessEvent):
 
         found = False
         for entry in journal_reader:
+            if "COREDUMP_FILENAME" not in entry:
+                continue
             core_id = os.path.basename(entry["COREDUMP_FILENAME"])
             if not core_id:
                 continue
