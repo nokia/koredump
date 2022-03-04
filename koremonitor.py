@@ -128,12 +128,21 @@ class KoreMonitor(pyinotify.ProcessEvent):
             journal_reader.add_match(
                 f"COREDUMP_FILENAME={core_path}",
             )
-            try:
-                st = os.stat(core_path)
-            except FileNotFoundError as ex:
-                self.logger.warning("Failed to stat %s: %s", core_path, ex)
-                return False
-            journal_reader.seek_realtime(st.st_ctime)
+            if "COREDUMP_TIMESTAMP" in self.cores[core_id]:
+                try:
+                    ts = datetime.fromisoformat(
+                        self.cores[core_id]["COREDUMP_TIMESTAMP"].removesuffix("Z")
+                    )
+                    journal_reader.seek_realtime(ts)
+                except Exception as ex:
+                    self.logger.debug("Failed to seek: %s: %s", core_path, ex)
+            else:
+                try:
+                    st = os.stat(core_path)
+                except FileNotFoundError as ex:
+                    self.logger.warning("Failed to stat %s: %s", core_path, ex)
+                    return False
+                journal_reader.seek_realtime(st.st_ctime)
 
         found = False
         for entry in journal_reader:
