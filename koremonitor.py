@@ -35,6 +35,7 @@ class KoreMonitor(pyinotify.ProcessEvent):
         self.cores = {}
         self.systemd_corepath = "/var/lib/systemd/coredump/"
         self.MAX_CORES = 10000
+        self.first_run = True
 
     def _load_index_json(self) -> dict:
         """
@@ -108,6 +109,15 @@ class KoreMonitor(pyinotify.ProcessEvent):
             "MESSAGE_ID=fc2e22bc6ee647b6b90729ab34a250b1",
             f"COREDUMP_FILENAME={core_path}",
         )
+
+        if not self.first_run:
+            try:
+                st = os.stat(core_path)
+            except FileNotFoundError as ex:
+                self.logger.warning("Failed to stat %s: %s", core_path, ex)
+                return False
+            journal_reader.seek_realtime(st.st_ctime)
+
         found = False
         for entry in journal_reader:
             core_id = os.path.basename(entry["COREDUMP_FILENAME"])
@@ -179,6 +189,7 @@ class KoreMonitor(pyinotify.ProcessEvent):
         dirty = False
 
         try:
+            retry = 10
             for core_id in sorted(os.listdir(self.systemd_corepath)):
                 if len(self.cores) >= self.MAX_CORES:
                     break
@@ -197,17 +208,23 @@ class KoreMonitor(pyinotify.ProcessEvent):
                 }
 
                 # Retry a few times, wait for systemd-coredump journal entries to become available.
-                retry = 10
                 while retry > 0:
                     if self.read_journal(core_path):
                         break
                     retry -= 1
                     time.sleep(0.05)
+                if not self.first_run:
+                    retry = 10
+                else:
+                    retry = 1
+
                 self.read_systemd_xattrs(core_id, core_path)
 
         except Exception as ex:
             self.logger.exception(ex)
             self.logger.debug("Exception: %s", ex)
+
+        self.first_run = False
 
         # Cleanup cores that have been deleted from filesystem.
         def filter_deleted_cores(cores: dict) -> dict:
