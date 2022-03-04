@@ -231,7 +231,7 @@ class KoreMonitor(pyinotify.ProcessEvent):
             nonlocal dirty
             newcores = {}
             for core_id in cores:
-                core_path = f"{cores[core_id]['_core_dir']}/{core_id}"
+                core_path = os.path.join(cores[core_id]["_core_dir"], core_id)
                 if os.path.exists(core_path):
                     newcores[core_id] = cores[core_id]
                 else:
@@ -333,7 +333,7 @@ class KoreMonitor(pyinotify.ProcessEvent):
             # If we failed to read timestamp from journal logs or xattrs, stat() the file.
             if "COREDUMP_TIMESTAMP" not in self.cores[core_id]:
                 try:
-                    core_path = f"{self.cores[core_id]['_core_dir']}/{core_id}"
+                    core_path = os.path.join(self.cores[core_id]["_core_dir"], core_id)
                     st = os.stat(core_path)
                     self.cores[core_id]["COREDUMP_TIMESTAMP"] = (
                         datetime.utcfromtimestamp(int(st.st_mtime)).isoformat() + "Z"
