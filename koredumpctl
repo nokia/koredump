@@ -212,10 +212,20 @@ function cmd_get {
 		exit 1
 	fi
 	if [ "$flag_1" ]; then
-		local line
-		line=$(cmd_list "json" | jq -r '.[-1] | .node + ";" + .id')
+		local js count line
+		js=$(cmd_list "json")
+		count=$(echo "$js" | jq -r 'length')
+		if [ "$count" = '0' ]; then
+			printf "%s\n" "${yellow}Nothing found.${reset}" >&2
+			return 0
+		fi
+		line=$(echo "$js" | jq -r '.node + ";" + .id')
 		node=$(echo "$line" | cut -d';' -f1)
 		core_id=$(echo "$line" | cut -d';' -f2-)
+		if [ -z "$node" ] || [ -z "$core_id" ]; then
+			printf "%s\n" "${red}Error: unable to detect node name and core ID of latest core${reset}" >&2
+			exit 1
+		fi
 	elif [ "$flag_a" ]; then
 		local js
 		local failcnt=0
