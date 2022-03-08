@@ -232,7 +232,7 @@ function cmd_get {
 				failcnt=$((failcnt + 1))
 			fi
 		done
-		if [ $failcnt -ge 0 ]; then
+		if [ $failcnt -gt 0 ]; then
 			return 1
 		fi
 		return 0
