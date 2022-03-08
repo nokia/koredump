@@ -131,14 +131,15 @@ function cmd_list {
 		printf "%s\n" "${yellow}Nothing found.${reset}" >&2
 		return 0
 	fi
-	local jq_cmd='"\u001b[1m- ID: " + .id + "\u001b[m\n"
-		+ "  Node: "+.node + "\n"
-		+ "  Pod: " + .pod + "\n"
-		+ "  Container: " + .container + "\n"
-		+ "  Namespace: " + .namespace + "\n"
-		+ "  Image: " + .image_name + "\n"
-		+ "  Signal: " + .COREDUMP_SIGNAL_NAME + " (\( .COREDUMP_SIGNAL // "" ))\n"
-		+ "  Timestamp: " + .COREDUMP_TIMESTAMP'
+	local jq_cmd='def bold: "\u001b[1m"; def reset: "\u001b[0m";
+		"\(bold)- ID: \(.id)\(reset)\n"
+		+ "  \(bold)Node:\(reset) \(.node)\n"
+		+ "  \(bold)Cmdline:\(reset) \"\(.COREDUMP_CMDLINE)\"\n"
+		+ "  \(bold)COMM:\(reset) \"\(.COREDUMP_COMM)\" | \(bold)PID:\(reset) \(.COREDUMP_PID) | \(bold)UID:\(reset) \(.COREDUMP_UID) | \(bold)GID:\(reset) \(.COREDUMP_GID)\n"
+		+ "  \(bold)Pod:\(reset) \(.pod) | \(bold)Container:\(reset) \(.container) | \(bold)Namespace:\(reset) \(.namespace)\n"
+		+ "  \(bold)Image:\(reset) \(.image_name)\n"
+		+ "  \(bold)Signal:\(reset) \(.COREDUMP_SIGNAL_NAME) (\( .COREDUMP_SIGNAL // "" ))\n"
+		+ "  \(bold)Timestamp:\(reset) \(.COREDUMP_TIMESTAMP)"'
 	if [ "$flag_1" ]; then
 		echo "$js" | jq -r ".[-1] | $jq_cmd"
 	else
