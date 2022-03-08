@@ -207,13 +207,16 @@ function get_core {
 function cmd_get {
 	local node="$1"
 	local core_id="$2"
+	if [ "$flag_1" ] && [ "$flag_a" ]; then
+		printf "%s\n" "${red}Error: use either -1 or -a${reset}" >&2
+		exit 1
+	fi
 	if [ "$flag_1" ]; then
 		local line
 		line=$(cmd_list "json" | jq -r '.[-1] | .node + ";" + .id')
 		node=$(echo "$line" | cut -d';' -f1)
 		core_id=$(echo "$line" | cut -d';' -f2-)
-	fi
-	if [ "$flag_a" ]; then
+	elif [ "$flag_a" ]; then
 		local js
 		local failcnt=0
 		for line in $(cmd_list "json" | jq -r '.[] | .node + ";" + .id + ";" + .namespace + ";" + .pod'); do
