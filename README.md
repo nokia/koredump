@@ -24,6 +24,7 @@ This project implements REST API for accessing coredumps in Kubernetes cluster.
   Note that if `core_pattern` is set e.g. to `/tmp/core` or similar, the cores are written to container filesystem, and not visible via this tool.
 - Core file deletion not (yet) possible. (Host paths are read-only mounted into containers)
 - REST API can return errors during installation and upgrade, when the koredump PODs are being terminated or created.
+- systemd-coredump by default limits core size to maximum 2GB, larger core files are truncated. Increase the limit by setting for example `ExternalSizeMax=32G` in /etc/systemd/coredump.conf (or add conf file in `/etc/systemd/coredump.conf.d/`)
 
 ## API Documentation
 
