@@ -58,7 +58,7 @@ spec:
             - name: DAEMONSET
               value: "1"
             - name: USE_TOKENS
-              value: {{ if .Values.adminToken }} "1" {{ else }} "0" {{ end }}
+              value: {{ if .Values.adminToken }}"1"{{ else }}"0"{{ end }}
           volumeMounts:
             - mountPath: /tmp
               name: tmp-volume
@@ -67,7 +67,7 @@ spec:
             - mountPath: /var/lib/systemd/coredump
               name: var-lib-systemd-coredump
               readOnly: true
-            {{ if .Values.adminToken }}
+            {{- if .Values.adminToken }}
             - mountPath: /run/secrets/koredump
               name: secret-tokens
               readOnly: true
@@ -118,11 +118,11 @@ spec:
             - mountPath: /run/containers
               name: run-containers
               readOnly: true
-            {{ if .Values.filter }}
+            {{- if .Values.filter }}
             - mountPath: /etc/koremonitor
               name: koremonitor-config
               readOnly: true
-            {{ end }}
+            {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}
@@ -135,9 +135,9 @@ spec:
       {{- end }}
       {{- if .Values.runOnControlPlaneNodes }}
       tolerations:
-      - key: node-role.kubernetes.io/master
-        operator: Exists
-        effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
       {{- end }}
       volumes:
         - name: tmp-volume
@@ -161,16 +161,16 @@ spec:
           hostPath:
             path: /run/containers
             type: DirectoryOrCreate
-        {{ if .Values.adminToken }}
+        {{- if .Values.adminToken }}
         - name: secret-tokens
           secret:
             secretName: secret-tokens
-        {{ end }}
-        {{ if .Values.filter }}
+        {{- end }}
+        {{- if .Values.filter }}
         - name: koremonitor-config
           configMap:
             name: koremonitor-config
-        {{ end }}
+        {{- end }}
         # Install copy of koredumpctl into host /usr/local/bin
         - name: usr-local-bin
           hostPath:
