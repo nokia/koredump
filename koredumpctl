@@ -18,11 +18,13 @@ fi
 
 HELM_CHART_URL="https://nokia.github.io/koredump/"
 
-red=$(tput setaf 1)
-green=$(tput setaf 2)
-yellow=$(tput setaf 3)
-bold=$(tput bold)
-reset=$(tput sgr0)
+if [ -t 1 ]; then
+	red=$(tput setaf 1)
+	green=$(tput setaf 2)
+	yellow=$(tput setaf 3)
+	bold=$(tput bold)
+	reset=$(tput sgr0)
+fi
 
 version= # Filled on install.
 token=
@@ -131,7 +133,7 @@ function cmd_list {
 		printf "%s\n" "${yellow}Nothing found.${reset}" >&2
 		return 0
 	fi
-	local jq_cmd='def bold: "\u001b[1m"; def reset: "\u001b[0m";
+	local jq_cmd='def bold: "'$bold'"; def reset: "'$reset'";
 		"\(bold)- ID: \(.id)\(reset)\n"
 		+ "  \(bold)Node:\(reset) \(.node)\n"
 		+ "  \(bold)Cmdline:\(reset) \"\(.COREDUMP_CMDLINE)\"\n"
