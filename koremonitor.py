@@ -241,7 +241,12 @@ class KoreMonitor(pyinotify.ProcessEvent):
                     "_core_dir": self.systemd_corepath,
                 }
 
-                self.read_systemd_xattrs(core_id, core_path)
+                try:
+                    self.read_systemd_xattrs(core_id, core_path)
+                except Exception as ex:
+                    self.logger.warning(
+                        "Failed to read xattr entries from %s: %s", core_path, ex
+                    )
 
                 if first_run:
                     continue
