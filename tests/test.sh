@@ -9,6 +9,9 @@
 # - Verify that core dump is visible and metadata was correctly collected.
 #
 
+SCRIPT=$(readlink -f "$0")
+SCRIPTPATH=$(dirname "$SCRIPT")
+
 project="koredump"
 test_image_name="quay.io/rantala/pycore:latest"
 
@@ -26,7 +29,8 @@ function check_core_pattern() {
 }
 function cleanup_pycores() {
 	if ls /var/lib/systemd/coredump/core.pycore.* &>/dev/null; then
-		echo "Cleanup old pycore core files."
+		echo "Cleanup pycore core files:"
+		sudo ls -l /var/lib/systemd/coredump/core.pycore.*
 		sudo rm /var/lib/systemd/coredump/core.pycore.*
 	fi
 }
@@ -35,6 +39,7 @@ function delete_coretest_pod() {
 		printf "%s\n" "${bold}kubectl delete pod coretest${reset}"
 		kubectl delete pod coretest
 		kubectl wait --for=delete pod coretest
+		printf "%s\n" "${bold}pod coretest deleted.${reset}"
 	fi
 }
 function usage() {
@@ -51,8 +56,8 @@ function print_hr() {
 function helm_uninstall() {
 	helm -n "$project" uninstall koredump || exit
 	sleep 1
-	echo "Waiting for koredump pods to terminate..."
 	secs=300
+	echo "Waiting up to ${secs}s for koredump pods to terminate..."
 	while [ "$(kubectl get pods -n "$project" -l app.kubernetes.io/name=koredump -o json | jq -r '.items | length')" -gt 0 ]; do
 		sleep 1
 		secs=$((secs - 1))
@@ -108,6 +113,9 @@ function test_core_get() {
 		rm core.pycore.*
 	fi
 	koredumpctl get -n koredump --pod coretest -1 || exit
+	if type file &>/dev/null; then
+		file core.pycore.*
+	fi
 	if ! test -f core.pycore.*.json; then
 		printf "%s\n" "${red}Error: core JSON metadata download failed${reset}" >&2
 		exit 1
@@ -121,10 +129,133 @@ function test_core_get() {
 		printf "%s\n" "${red}Error: core download failed${reset}" >&2
 		exit 1
 	fi
+	rm core.pycore.*
 	printf "%s\n" "${green}Core download is OK.${reset}"
 }
+function run_test() {
+	local no_uninstall="$1"
+	local namespaceRegex="$2"
 
-no_uninstall=""
+	printf "\n%s\n" "${bold}Starting koredump tests with namespaceRegex='$namespaceRegex' ...${reset}"
+
+	delete_coretest_pod || exit
+	cleanup_pycores || exit
+
+	if helm -n "$project" status koredump &>/dev/null; then
+		if [ "$no_uninstall" ]; then
+			printf "%s\n" "${red}Error: koredump helm chart already installed${reset}" >&2
+			exit 1
+		fi
+		printf "%s\n" "${bold}$project already installed, uninstalling...${reset}"
+		helm_uninstall || exit
+	fi
+
+	local helm_set=()
+	local git_branch
+	git_branch=$(git symbolic-ref --short -q HEAD)
+	if [ "$git_branch" ]; then
+		helm_set+=("--set-string" "image.tag=$git_branch")
+	fi
+	if [ "$namespaceRegex" ]; then
+		helm_set+=("--set-string" "filter.namespaceRegex=$namespaceRegex")
+	fi
+
+	printf "\n%s\n" "${bold}helm install ${helm_set[*]} ...${reset}"
+	helm -n "$project" install "${helm_set[@]}" --wait koredump "$SCRIPTPATH/../charts/koredump/" || exit
+	secs=300
+	printf "\n%s\n" "${bold}Waiting up to ${secs}s for koredump pods to start ...${reset}"
+	while [ "$(kubectl get pods -n $project -l app.kubernetes.io/name=koredump -o json | jq -r '.items[].status.conditions[].status | select(.=="False")')" ]; do
+		sleep 3
+		secs=$((secs - 3))
+		if [ $secs -le 0 ]; then
+			printf "%s\n" "${red}Error: timed out waiting koredump pods to start${reset}" >&2
+			exit 1
+		fi
+	done
+
+	printf "\n%s\n" "${bold}Kubernetes resource status in $project namespace:${reset}"
+	kubectl get all -n "$project" || exit
+
+	print_hr
+	printf "%s\n" "${bold}koredumpctl status:${reset}"
+	koredumpctl status || exit
+	print_hr
+
+	printf "\n%s\n" "${bold}Run pod/coretest ...${reset}"
+	kubectl run coretest --image="$test_image_name" --restart=Never || exit
+
+	sleep 1
+	secs=300
+	while test -z "$(kubectl -n $project get pod/coretest -o jsonpath='{ .status.containerStatuses[0].state.terminated.exitCode }')"; do
+		sleep 1
+		secs=$((secs - 1))
+		if [ $secs -le 0 ]; then
+			printf "%s\n" "${red}Error: timed out waiting pod/coretest to finish${reset}" >&2
+			exit 1
+		fi
+	done
+
+	printf "\n%s\n" "${bold}pod/coretest finished, logs:${reset}"
+	kubectl logs coretest
+	print_hr
+	delete_coretest_pod || exit
+
+	expect_core="true"
+	if [ "$namespaceRegex" ] && ! echo "$project" | grep -q -E "^${namespaceRegex}$"; then
+		expect_core=""
+	fi
+
+	if [ "$expect_core" ]; then
+		secs=300
+		echo "Core file expected: waiting up to ${secs}s for core file to be available ..."
+		while test "$(koredumpctl list -n koredump --pod coretest -o json | jq -r 'length')" -lt 1; do
+			sleep 3
+			secs=$((secs - 3))
+			if [ $secs -le 0 ]; then
+				printf "%s\n" "${red}Error: timed out waiting core file to be available${reset}" >&2
+				exit 1
+			fi
+		done
+	else
+		secs=60
+		echo "Core file not expected: waiting ${secs}s to verify that core not collected ..."
+		while test "$(koredumpctl list -n koredump --pod coretest -o json | jq -r 'length')" -eq 0; do
+			sleep 3
+			secs=$((secs - 3))
+			if [ $secs -le 0 ]; then
+				break
+			fi
+		done
+		if [ $secs -gt 0 ]; then
+			printf "%s\n" "${red}Error: timed out waiting core file to be available${reset}" >&2
+			exit 1
+		fi
+	fi
+
+	printf "\n%s\n" "${bold}koredumpctl list:${reset}"
+	koredumpctl list || exit
+
+	if [ "$expect_core" ]; then
+		test_core_metadata || exit
+		test_core_get || exit
+	fi
+	cleanup_pycores
+
+	printf "\n%s\n" "${bold}koredumpctl list:${reset}"
+	koredumpctl list || exit
+
+	core_count=$(koredumpctl list -n koredump --pod coretest -o json | jq -r 'length')
+	if [ "$core_count" -gt 0 ]; then
+		printf "%s\n" "${red}Error: unexpected core files in output${reset}" >&2
+		exit 1
+	fi
+
+	if [ -z "$no_uninstall" ]; then
+		helm_uninstall || exit
+	fi
+}
+
+flag_no_uninstall=""
 
 opts=$(getopt --longoptions "help,no-uninstall" \
 	--options "hU" --name "$(basename "$0")" -- "$@")
@@ -132,7 +263,7 @@ eval set -- "$opts"
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 	-U | --no-uninstall)
-		no_uninstall="true"
+		flag_no_uninstall="true"
 		shift 2
 		;;
 	-h | --help)
@@ -157,92 +288,13 @@ if type oc &>/dev/null && [ "$(oc project -q)" != "$project" ]; then
 	oc project "$project" || exit
 fi
 
-delete_coretest_pod || exit
-cleanup_pycores || exit
-
-if helm -n "$project" status koredump &>/dev/null; then
-	if [ "$no_uninstall" ]; then
-		printf "%s\n" "${red}Error: koredump helm chart already installed${reset}" >&2
-		exit 1
-	fi
-	printf "%s\n" "${bold}$project already installed, uninstalling...${reset}"
-	helm_uninstall || exit
-fi
-
-helm_set=()
-git_branch=$(git symbolic-ref --short -q HEAD)
-if [ "$git_branch" ]; then
-	helm_set+=("--set-string image.tag=$git_branch")
-fi
-
-printf "\n%s\n" "${bold}helm install ${helm_set[*]} ...${reset}"
-helm -n "$project" install "${helm_set[@]}" --wait koredump charts/koredump/ || exit
-printf "\n%s\n" "${bold}Waiting for koredump pods to start ...${reset}"
-secs=300
-while [ "$(kubectl get pods -n $project -l app.kubernetes.io/name=koredump -o json | jq -r '.items[].status.conditions[].status | select(.=="False")')" ]; do
-	sleep 3
-	secs=$((secs - 3))
-	if [ $secs -le 0 ]; then
-		printf "%s\n" "${red}Error: timed out waiting koredump pods to start${reset}" >&2
-		exit 1
-	fi
-done
-
-printf "\n%s\n" "${bold}Kubernetes resource status in $project namespace:${reset}"
-kubectl get all -n "$project" || exit
-
-print_hr
-printf "%s\n" "${bold}koredumpctl status:${reset}"
-koredumpctl status || exit
-print_hr
-
-printf "\n%s\n" "${bold}Run pod/coretest ...${reset}"
-kubectl run coretest --image="$test_image_name" --restart=Never || exit
-
-sleep 1
-secs=300
-while test -z "$(kubectl -n $project get pod/coretest -o jsonpath='{ .status.containerStatuses[0].state.terminated.exitCode }')"; do
-	sleep 1
-	secs=$((secs - 1))
-	if [ $secs -le 0 ]; then
-		printf "%s\n" "${red}Error: timed out waiting pod/coretest to finish${reset}" >&2
-		exit 1
-	fi
-done
-
-printf "\n%s\n" "${bold}pod/coretest finished, logs:${reset}"
-kubectl logs coretest
-print_hr
-delete_coretest_pod || exit
-
-secs=300
-while test "$(koredumpctl list -n koredump --pod coretest -o json | jq -r 'length')" -lt 1; do
-	sleep 1
-	secs=$((secs - 1))
-	if [ $secs -le 0 ]; then
-		printf "%s\n" "${red}Error: timed out waiting core file to be available${reset}" >&2
-		exit 1
-	fi
-done
-
-printf "\n%s\n" "${bold}koredumpctl list:${reset}"
-koredumpctl list || exit
-
-test_core_metadata || exit
-test_core_get || exit
-cleanup_pycores
-
-printf "\n%s\n" "${bold}koredumpctl list:${reset}"
-koredumpctl list || exit
-
-core_count=$(koredumpctl list -n koredump --pod coretest -o json | jq -r 'length')
-if [ "$core_count" -gt 0 ]; then
-	printf "%s\n" "${red}Error: unexpected core files in output${reset}" >&2
+if [ "$flag_no_uninstall" ] && helm -n "$project" status koredump &>/dev/null; then
+	printf "%s\n" "${red}Error: koredump helm chart already installed${reset}" >&2
 	exit 1
 fi
 
-if [ -z "$no_uninstall" ]; then
-	helm_uninstall || exit
-fi
+run_test "" "koredu[a-z].+" || exit
+run_test "" "xxxxxx" || exit
+run_test "$flag_no_uninstall" "" || exit
 
 printf "\n%s\n" "${green}SUCCESS${reset}"
