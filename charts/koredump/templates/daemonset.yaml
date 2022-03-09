@@ -118,6 +118,11 @@ spec:
             - mountPath: /run/containers
               name: run-containers
               readOnly: true
+            {{ if .Values.filter }}
+            - mountPath: /etc/koremonitor
+              name: koremonitor-config
+              readOnly: true
+            {{ end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}
@@ -160,6 +165,11 @@ spec:
         - name: secret-tokens
           secret:
             secretName: secret-tokens
+        {{ end }}
+        {{ if .Values.filter }}
+        - name: koremonitor-config
+          configMap:
+            name: koremonitor-config
         {{ end }}
         # Install copy of koredumpctl into host /usr/local/bin
         - name: usr-local-bin

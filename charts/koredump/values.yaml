@@ -15,6 +15,14 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+filter: {}
+  # Filter core files based on kubernetes namespace.
+  # If defined, cores are only collected if the namespace name matches the regex.
+  #
+  # If no filter is defined (default), all cores are collected.
+  #
+  # namespaceRegex: 'test.*'
+
 # Run and collect core dumps also on control plane nodes.
 runOnControlPlaneNodes: true
 

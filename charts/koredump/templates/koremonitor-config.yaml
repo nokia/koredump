@@ -1,0 +1,10 @@
+{{ if .Values.filter }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: koremonitor-config
+data:
+  config.yaml: |
+    filter_namespace_regex: {{ .Values.filter.namespaceRegex }}
+{{ end }}

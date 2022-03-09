@@ -12,11 +12,11 @@ This project implements REST API for accessing coredumps in Kubernetes cluster.
 - `DAC_OVERRIDE` capability is used in container to access core dump files and journal logs.
 - Command line utility `koredumpctl` that uses the REST API. Automatically installed in OCP to `/usr/local/bin/koredumpctl` with Kubernetes init container.
 - Note that in OCP core dumps are deleted by default after 3 days (see `systemd-tmpfiles --cat-config | grep core`).
+- Collect all coredumps in cluster by default. Limit to predefined namespaces by setting `filter.namespaceRegex` variable when installing with Helm charts.
 
 ## Limitations
 
 - Red Hat OCP `privileged` [Security Context Constraint (SCC)](https://docs.openshift.com/container-platform/4.9/authentication/managing-security-context-constraints.html) is needed.
-- Collects all coredumps in cluster (in the future, we may offer way to limit coredump collection for example to predefined namespaces only).
 - Optional hardcoded token authentication (`adminToken` in `values.yaml`).
 - In-cluster traffic is unencrypted HTTP.
 - Simple implementation with python3.

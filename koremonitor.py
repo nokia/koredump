@@ -20,6 +20,7 @@ from datetime import datetime
 
 import pyinotify
 import xattr
+import yaml
 from systemd import journal
 
 
@@ -35,6 +36,35 @@ class KoreMonitor(pyinotify.ProcessEvent):
         self.cores = {}
         self.systemd_corepath = "/var/lib/systemd/coredump/"
         self.MAX_CORES = 10000
+        self.filter_namespace_regex = None
+
+    def load_config(self, config_path="/etc/koremonitor/config.yaml"):
+        if not os.path.exists(config_path):
+            return
+        self.logger.info("Reading %s", config_path)
+
+        try:
+            with open(config_path) as fp:
+                ret = yaml.safe_load(fp)
+            if ret and "filter_namespace_regex" in ret:
+                self.filter_namespace_regex = re.compile(ret["filter_namespace_regex"])
+                self.logger.info(
+                    "Filter namespace regex: %s",
+                    self.filter_namespace_regex,
+                )
+        except Exception as ex:
+            self.logger.error("%s: %s", config_path, ex)
+            raise ex
+
+    @property
+    def filters_defined(self) -> bool:
+        """
+        Return True if some filter is defined.
+        Filters allow to collect only subset of possible core files.
+        """
+        if self.filter_namespace_regex:
+            return True
+        return False
 
     def _load_index_json(self) -> dict:
         """
@@ -68,13 +98,32 @@ class KoreMonitor(pyinotify.ProcessEvent):
     def load_index_json(self):
         self.cores = self._load_index_json()
 
+    def _cores_to_disk(self) -> dict:
+        """
+        Return data that shall be written index.json on disk.
+        If filters are set, returned dict can be a subset of full data.
+        """
+        if not self.filters_defined:
+            return self.cores
+
+        newcores = {}
+        for core_id in self.cores:
+            if "_filtered" not in self.cores[core_id]:
+                # Filter decision net yet done? Skip it for now.
+                continue
+            if self.cores[core_id]["_filtered"]:
+                continue
+            newcores[core_id] = self.cores[core_id]
+        return newcores
+
     def save_index_json(self):
         """Save index.json to disk."""
         index_path = os.path.join(self.koredir, "index.json")
         index_path_tmp = f"{index_path}.tmp"
         try:
+            cores_to_disk = self._cores_to_disk()
             with open(index_path_tmp, "w") as fp:
-                json.dump(self.cores, fp)
+                json.dump(cores_to_disk, fp)
             os.rename(index_path_tmp, index_path)
         except Exception as ex:
             self.logger.warning("Failed to generate %s: %s", index_path_tmp, ex)
@@ -215,6 +264,28 @@ class KoreMonitor(pyinotify.ProcessEvent):
             except ValueError:
                 pass
             # self.logger.debug(" - %s: %s", attr_name, self.cores[core_id][attr_name])
+
+    def filter_apply(self):
+        """
+        Apply filters to all cores.
+        """
+        if not self.filters_defined:
+            return
+
+        for core_id in self.cores:
+            if "_filtered" in self.cores[core_id] and self.cores[core_id]["_filtered"]:
+                continue
+            if "namespace" not in self.cores[core_id]:
+                continue
+            if not self.filter_namespace_regex.match(self.cores[core_id]["namespace"]):
+                self.cores[core_id]["_filtered"] = True
+                self.logger.info(
+                    "Filter core %s, namespace does not match %s",
+                    core_id,
+                    self.filter_namespace_regex,
+                )
+            else:
+                self.cores[core_id]["_filtered"] = False
 
     def read_cores(self, first_run=False):
         """
@@ -391,6 +462,7 @@ class KoreMonitor(pyinotify.ProcessEvent):
             # Assume all core files are generated on local machine.
             self.cores[core_id]["ARCH"] = os.uname().machine
 
+        self.filter_apply()
         self.save_index_json()
 
     def process_IN_CREATE(self, event: pyinotify.Event):
@@ -429,6 +501,7 @@ if __name__ == "__main__":
             "Monitoring path does not exist: %s", koremonitor.systemd_corepath
         )
         exit(1)
+    koremonitor.load_config()
     koremonitor.load_index_json()
     watch_manager = pyinotify.WatchManager()
     event_notifier = pyinotify.Notifier(watch_manager, koremonitor)
