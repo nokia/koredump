@@ -7,7 +7,7 @@ This project implements REST API for accessing coredumps in Kubernetes cluster.
 - In-cluster `http://koreapi.koredump.svc.cluster.local:80` REST API (Kubernetes Service).
   One container per cluster, application listening port 5000.
 - One REST API server per node in k8s cluster (Kubernetes DaemonSet), listening port 5001.
-- No changes to platform config (`core_pattern`), use default `systemd-coredump` in OCP.
+- No changes to platform `core_pattern` kernel config, use default `systemd-coredump` in OCP.
 - Access coredump files from `/var/lib/systemd/coredump`, and (optionally) read journal logs for full coredump metadata written by `systemd-coredump`.
 - `DAC_OVERRIDE` capability is used in container to access core dump files and journal logs.
 - Command line utility `koredumpctl` that uses the REST API. Automatically installed in OCP to `/usr/local/bin/koredumpctl` with Kubernetes init container.
@@ -20,9 +20,9 @@ This project implements REST API for accessing coredumps in Kubernetes cluster.
 - Optional hardcoded token authentication (`adminToken` in `values.yaml`).
 - In-cluster traffic is unencrypted HTTP.
 - Simple implementation with python3.
-- Hardcoded `/var/lib/systemd/coredump` directory for core files.
+- Hard requirement on systemd-coredump, core files are processed from `/var/lib/systemd/coredump` directory only.
   Note that if `core_pattern` is set e.g. to `/tmp/core` or similar, the cores are written to container filesystem, and not visible via this tool.
-- Core file deletion not (yet) possible. (Host paths are read-only mounted into container)
+- Core file deletion not (yet) possible. (Host paths are read-only mounted into containers)
 - REST API can return errors during installation and upgrade, when the koredump PODs are being terminated or created.
 
 ## API Documentation
