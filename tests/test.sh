@@ -15,11 +15,12 @@ SCRIPTPATH=$(dirname "$SCRIPT")
 project="koredump"
 test_image_name="quay.io/rantala/pycore:latest"
 
-red=$(tput setaf 1)
-green=$(tput setaf 2)
-#yellow=$(tput setaf 3)
-bold=$(tput bold)
-reset=$(tput sgr0)
+if [ -z "$NO_COLOR" ] && [ -t 1 ]; then
+	red=$(tput setaf 1)
+	green=$(tput setaf 2)
+	bold=$(tput bold)
+	reset=$(tput sgr0)
+fi
 
 function check_core_pattern() {
 	if ! grep -q '^|/usr/lib/systemd/systemd-coredump ' /proc/sys/kernel/core_pattern; then
