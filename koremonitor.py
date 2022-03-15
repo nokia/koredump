@@ -20,6 +20,7 @@ from datetime import datetime
 
 import pyinotify
 import xattr
+import yaml
 from systemd import journal
 
 
@@ -35,7 +36,35 @@ class KoreMonitor(pyinotify.ProcessEvent):
         self.cores = {}
         self.systemd_corepath = "/var/lib/systemd/coredump/"
         self.MAX_CORES = 10000
-        self.first_run = True
+        self.filter_namespace_regex = None
+
+    def load_config(self, config_path="/etc/koremonitor/config.yaml"):
+        if not os.path.exists(config_path):
+            return
+        self.logger.info("Reading %s", config_path)
+
+        try:
+            with open(config_path) as fp:
+                ret = yaml.safe_load(fp)
+            if ret and "filter_namespace_regex" in ret:
+                self.filter_namespace_regex = re.compile(ret["filter_namespace_regex"])
+                self.logger.info(
+                    "Filter namespace regex: %s",
+                    self.filter_namespace_regex,
+                )
+        except Exception as ex:
+            self.logger.error("%s: %s", config_path, ex)
+            raise ex
+
+    @property
+    def filters_defined(self) -> bool:
+        """
+        Return True if some filter is defined.
+        Filters allow to collect only subset of possible core files.
+        """
+        if self.filter_namespace_regex:
+            return True
+        return False
 
     def _load_index_json(self) -> dict:
         """
@@ -69,13 +98,32 @@ class KoreMonitor(pyinotify.ProcessEvent):
     def load_index_json(self):
         self.cores = self._load_index_json()
 
+    def _cores_to_disk(self) -> dict:
+        """
+        Return data that shall be written index.json on disk.
+        If filters are set, returned dict can be a subset of full data.
+        """
+        if not self.filters_defined:
+            return self.cores
+
+        newcores = {}
+        for core_id in self.cores:
+            if "_filtered" not in self.cores[core_id]:
+                # Filter decision net yet done? Skip it for now.
+                continue
+            if self.cores[core_id]["_filtered"]:
+                continue
+            newcores[core_id] = self.cores[core_id]
+        return newcores
+
     def save_index_json(self):
         """Save index.json to disk."""
         index_path = os.path.join(self.koredir, "index.json")
         index_path_tmp = f"{index_path}.tmp"
         try:
+            cores_to_disk = self._cores_to_disk()
             with open(index_path_tmp, "w") as fp:
-                json.dump(self.cores, fp)
+                json.dump(cores_to_disk, fp)
             os.rename(index_path_tmp, index_path)
         except Exception as ex:
             self.logger.warning("Failed to generate %s: %s", index_path_tmp, ex)
@@ -99,31 +147,65 @@ class KoreMonitor(pyinotify.ProcessEvent):
                 self.logger.error(k, v)
         return entry
 
-    def read_journal(self, core_path) -> bool:
+    def read_journal(self, core_id=None) -> bool:
         """
-        Read systemd-coredump metadata for given core, from journal.
+        Read systemd-coredump metadata, optionally for given core, from systemd journal.
         Return true if entry found from journal.
         """
+
+        if not core_id:
+            missing = False
+            for core_id in self.cores:
+                if (
+                    "_systemd_journal" not in self.cores[core_id]
+                    or not self.cores[core_id]["_systemd_journal"]
+                ):
+                    missing = True
+                    break
+            if not missing:
+                self.logger.debug(
+                    "Skip journal read, we already have journal metadata for all cores."
+                )
+                return False
+
         journal_reader = journal.Reader()
         journal_reader.add_match(
             "MESSAGE_ID=fc2e22bc6ee647b6b90729ab34a250b1",
-            f"COREDUMP_FILENAME={core_path}",
         )
-
-        if not self.first_run:
-            try:
-                st = os.stat(core_path)
-            except FileNotFoundError as ex:
-                self.logger.warning("Failed to stat %s: %s", core_path, ex)
-                return False
-            journal_reader.seek_realtime(st.st_ctime)
+        if core_id:
+            core_path = os.path.join(self.cores[core_id]["_core_dir"], core_id)
+            journal_reader.add_match(
+                f"COREDUMP_FILENAME={core_path}",
+            )
+            if "COREDUMP_TIMESTAMP" in self.cores[core_id]:
+                try:
+                    ts = datetime.fromisoformat(
+                        self.cores[core_id]["COREDUMP_TIMESTAMP"].removesuffix("Z")
+                    )
+                    journal_reader.seek_realtime(ts)
+                except Exception as ex:
+                    self.logger.debug("Failed to seek: %s: %s", core_path, ex)
+            else:
+                try:
+                    st = os.stat(core_path)
+                except FileNotFoundError as ex:
+                    self.logger.warning("Failed to stat %s: %s", core_path, ex)
+                    return False
+                journal_reader.seek_realtime(st.st_ctime)
 
         found = False
         for entry in journal_reader:
+            if "COREDUMP_FILENAME" not in entry:
+                continue
             core_id = os.path.basename(entry["COREDUMP_FILENAME"])
             if not core_id:
                 continue
             if core_id not in self.cores:
+                continue
+            if (
+                "_systemd_journal" in self.cores[core_id]
+                and self.cores[core_id]["_systemd_journal"]
+            ):
                 continue
             self.cores[core_id].update(self.fmt_journal_entry(entry))
             self.logger.info(
@@ -131,6 +213,7 @@ class KoreMonitor(pyinotify.ProcessEvent):
                 core_id,
                 len(self.cores[core_id]),
             )
+            self.cores[core_id]["_systemd_journal"] = True
             found = True
         return found
 
@@ -182,14 +265,35 @@ class KoreMonitor(pyinotify.ProcessEvent):
                 pass
             # self.logger.debug(" - %s: %s", attr_name, self.cores[core_id][attr_name])
 
-    def read_cores(self):
+    def filter_apply(self):
+        """
+        Apply filters to all cores.
+        """
+        if not self.filters_defined:
+            return
+
+        for core_id in self.cores:
+            if "_filtered" in self.cores[core_id] and self.cores[core_id]["_filtered"]:
+                continue
+            if "namespace" not in self.cores[core_id]:
+                continue
+            if not self.filter_namespace_regex.match(self.cores[core_id]["namespace"]):
+                self.cores[core_id]["_filtered"] = True
+                self.logger.info(
+                    "Filter core %s, namespace does not match %s",
+                    core_id,
+                    self.filter_namespace_regex,
+                )
+            else:
+                self.cores[core_id]["_filtered"] = False
+
+    def read_cores(self, first_run=False):
         """
         Process any new core files.
         """
         dirty = False
 
         try:
-            retry = 10
             for core_id in sorted(os.listdir(self.systemd_corepath)):
                 if len(self.cores) >= self.MAX_CORES:
                     break
@@ -204,34 +308,48 @@ class KoreMonitor(pyinotify.ProcessEvent):
                 self.cores[core_id] = {
                     "id": core_id,
                     "_systemd_coredump": True,
+                    "_systemd_journal": False,
                     "_core_dir": self.systemd_corepath,
                 }
 
+                try:
+                    self.read_systemd_xattrs(core_id, core_path)
+                except Exception as ex:
+                    self.logger.warning(
+                        "Failed to read xattr entries from %s: %s", core_path, ex
+                    )
+
+                if first_run:
+                    continue
+
                 # Retry a few times, wait for systemd-coredump journal entries to become available.
+                retrymax = 20
+                retry = retrymax
                 while retry > 0:
-                    if self.read_journal(core_path):
+                    if self.read_journal(core_id):
                         break
                     retry -= 1
-                    time.sleep(0.05)
-                if not self.first_run:
-                    retry = 10
-                else:
-                    retry = 1
+                    time.sleep(0.1)
+                if retry != retrymax:
+                    self.logger.info(
+                        "%s: retried journal read %d times.", core_id, retrymax - retry
+                    )
 
-                self.read_systemd_xattrs(core_id, core_path)
+            # Now read journal entries for all cores we found.
+            if first_run:
+                if self.read_journal():
+                    dirty = True
 
         except Exception as ex:
             self.logger.exception(ex)
             self.logger.debug("Exception: %s", ex)
-
-        self.first_run = False
 
         # Cleanup cores that have been deleted from filesystem.
         def filter_deleted_cores(cores: dict) -> dict:
             nonlocal dirty
             newcores = {}
             for core_id in cores:
-                core_path = f"{cores[core_id]['_core_dir']}/{core_id}"
+                core_path = os.path.join(cores[core_id]["_core_dir"], core_id)
                 if os.path.exists(core_path):
                     newcores[core_id] = cores[core_id]
                 else:
@@ -333,7 +451,7 @@ class KoreMonitor(pyinotify.ProcessEvent):
             # If we failed to read timestamp from journal logs or xattrs, stat() the file.
             if "COREDUMP_TIMESTAMP" not in self.cores[core_id]:
                 try:
-                    core_path = f"{self.cores[core_id]['_core_dir']}/{core_id}"
+                    core_path = os.path.join(self.cores[core_id]["_core_dir"], core_id)
                     st = os.stat(core_path)
                     self.cores[core_id]["COREDUMP_TIMESTAMP"] = (
                         datetime.utcfromtimestamp(int(st.st_mtime)).isoformat() + "Z"
@@ -344,6 +462,7 @@ class KoreMonitor(pyinotify.ProcessEvent):
             # Assume all core files are generated on local machine.
             self.cores[core_id]["ARCH"] = os.uname().machine
 
+        self.filter_apply()
         self.save_index_json()
 
     def process_IN_CREATE(self, event: pyinotify.Event):
@@ -382,6 +501,7 @@ if __name__ == "__main__":
             "Monitoring path does not exist: %s", koremonitor.systemd_corepath
         )
         exit(1)
+    koremonitor.load_config()
     koremonitor.load_index_json()
     watch_manager = pyinotify.WatchManager()
     event_notifier = pyinotify.Notifier(watch_manager, koremonitor)
@@ -390,6 +510,7 @@ if __name__ == "__main__":
         pyinotify.IN_CREATE | pyinotify.IN_CLOSE_WRITE | pyinotify.IN_DELETE,
     )
     logging.info("Start watching %s", koremonitor.systemd_corepath)
-    koremonitor.read_cores()
+    koremonitor.read_cores(first_run=True)
+    koremonitor.save_index_json()
     logging.info("Total %d cores available.", len(koremonitor.cores))
     event_notifier.loop()

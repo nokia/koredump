@@ -1,0 +1,54 @@
+#!/bin/python3
+# Copyright (C) 2022 Nokia
+# Licensed under the MIT License
+# SPDX-License-Identifier: MIT
+#
+# This python script allocates several gigabytes of memory and generates core
+# dump by causing SIGSEGV.
+
+import ctypes
+import mmap
+import os
+import sys
+
+MAP_HUGETLB = 0x040000
+max_mem = 5
+
+print("PID:", os.getpid())
+
+with open("/proc/meminfo") as f:
+    for line in f:
+        if line.startswith("MemAvailable:"):
+            availGB = int(int(line.split()[1]) / 1024 ** 2)
+
+print(f"MemAvailable: {availGB}GB", flush=True)
+
+if availGB <= 0:
+    print("Error: not enough memory available", file=sys.stderr)
+    sys.exit(1)
+
+if availGB < max_mem:
+    max_mem = availGB
+
+print(f"Allocating {max_mem}GB memory", flush=True)
+mmaps = []
+while len(mmaps) < max_mem:
+    flags = mmap.MAP_ANONYMOUS | mmap.MAP_PRIVATE
+    m = mmap.mmap(-1, 1024 ** 3, flags)
+    print(f"- Writing {int(len(m)/1024**3)}GB...")
+    for idx in range(0, len(m), 4096):
+        m[idx] = 1
+    mmaps.append(m)
+print()
+
+print("/proc/self/smaps_rollup:", flush=True)
+with open("/proc/self/smaps_rollup") as f:
+    for line in f:
+        print(line.strip())
+print()
+
+print("Generate SIGSEGV", flush=True)
+ctypes.memset(0, 0, 1)
+
+print("Still here :-(", flush=True)
+sys.exit(1)

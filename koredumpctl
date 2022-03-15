@@ -18,11 +18,13 @@ fi
 
 HELM_CHART_URL="https://nokia.github.io/koredump/"
 
-red=$(tput setaf 1)
-green=$(tput setaf 2)
-yellow=$(tput setaf 3)
-bold=$(tput bold)
-reset=$(tput sgr0)
+if [ -t 1 ]; then
+	red=$(tput setaf 1)
+	green=$(tput setaf 2)
+	yellow=$(tput setaf 3)
+	bold=$(tput bold)
+	reset=$(tput sgr0)
+fi
 
 version= # Filled on install.
 token=
@@ -131,14 +133,15 @@ function cmd_list {
 		printf "%s\n" "${yellow}Nothing found.${reset}" >&2
 		return 0
 	fi
-	local jq_cmd='"\u001b[1m- ID: " + .id + "\u001b[m\n"
-		+ "  Node: "+.node + "\n"
-		+ "  Pod: " + .pod + "\n"
-		+ "  Container: " + .container + "\n"
-		+ "  Namespace: " + .namespace + "\n"
-		+ "  Image: " + .image_name + "\n"
-		+ "  Signal: " + .COREDUMP_SIGNAL_NAME + " (\( .COREDUMP_SIGNAL // "" ))\n"
-		+ "  Timestamp: " + .COREDUMP_TIMESTAMP'
+	local jq_cmd='def bold: "'$bold'"; def reset: "'$reset'";
+		"\(bold)- ID: \(.id)\(reset)\n"
+		+ "  \(bold)Node:\(reset) \(.node)\n"
+		+ "  \(bold)Cmdline:\(reset) \"\(.COREDUMP_CMDLINE)\"\n"
+		+ "  \(bold)COMM:\(reset) \"\(.COREDUMP_COMM)\" | \(bold)PID:\(reset) \(.COREDUMP_PID) | \(bold)UID:\(reset) \(.COREDUMP_UID) | \(bold)GID:\(reset) \(.COREDUMP_GID)\n"
+		+ "  \(bold)Pod:\(reset) \(.pod) | \(bold)Container:\(reset) \(.container) | \(bold)Namespace:\(reset) \(.namespace)\n"
+		+ "  \(bold)Image:\(reset) \(.image_name)\n"
+		+ "  \(bold)Signal:\(reset) \(.COREDUMP_SIGNAL_NAME) (\( .COREDUMP_SIGNAL // "" ))\n"
+		+ "  \(bold)Timestamp:\(reset) \(.COREDUMP_TIMESTAMP)"'
 	if [ "$flag_1" ]; then
 		echo "$js" | jq -r ".[-1] | $jq_cmd"
 	else
@@ -207,13 +210,26 @@ function get_core {
 function cmd_get {
 	local node="$1"
 	local core_id="$2"
+	if [ "$flag_1" ] && [ "$flag_a" ]; then
+		printf "%s\n" "${red}Error: use either -1 or -a${reset}" >&2
+		exit 1
+	fi
 	if [ "$flag_1" ]; then
-		local line
-		line=$(cmd_list "json" | jq -r '.[-1] | .node + ";" + .id')
+		local js count line
+		js=$(cmd_list "json")
+		count=$(echo "$js" | jq -r 'length')
+		if [ "$count" = '0' ]; then
+			printf "%s\n" "${yellow}Nothing found.${reset}" >&2
+			return 0
+		fi
+		line=$(echo "$js" | jq -r '.node + ";" + .id')
 		node=$(echo "$line" | cut -d';' -f1)
 		core_id=$(echo "$line" | cut -d';' -f2-)
-	fi
-	if [ "$flag_a" ]; then
+		if [ -z "$node" ] || [ -z "$core_id" ]; then
+			printf "%s\n" "${red}Error: unable to detect node name and core ID of latest core${reset}" >&2
+			exit 1
+		fi
+	elif [ "$flag_a" ]; then
 		local js
 		local failcnt=0
 		for line in $(cmd_list "json" | jq -r '.[] | .node + ";" + .id + ";" + .namespace + ";" + .pod'); do
@@ -232,7 +248,7 @@ function cmd_get {
 				failcnt=$((failcnt + 1))
 			fi
 		done
-		if [ $failcnt -ge 0 ]; then
+		if [ $failcnt -gt 0 ]; then
 			return 1
 		fi
 		return 0
