@@ -334,21 +334,23 @@ function usage {
 	echo "Access core dumps in kubernetes cluster."
 	echo
 	echo "Commands:"
-	echo "  list             List all cores in kubernetes cluster"
-	echo "  get              Download cores"
-	echo "  status           Show status and version information"
+	echo "  list               List all cores in kubernetes cluster"
+	echo "  get                Download cores"
+	echo "  status             Show status and version information"
 	echo
 	echo "list options:"
-	echo "  -o json          Output format (default human)"
-	echo "  -1               Show latest core only"
+	echo "  -o json            Output format (default human)"
+	echo "  -1                 Show latest core only"
+	echo "  -n,--namespace NS  List cores matching kubernetes namespace"
+	echo "  -p,--pod POD       List cores matching kubernetes POD"
 	echo
 	echo "get options:"
-	echo "  -1               Download latest core"
-	echo "  -a               Download all cores"
-	echo "  -d               Download uncompressed core(s)"
-	echo "  -n,--namespace N Download cores matching kubernetes namespace"
-	echo "  -p,--pod POD     Download cores matching kubernetes POD"
-	echo "  node id          Download core identified by node and id"
+	echo "  -1                 Download latest core"
+	echo "  -a                 Download all cores"
+	echo "  -d                 Download uncompressed core(s)"
+	echo "  -n,--namespace NS  Download cores matching kubernetes namespace"
+	echo "  -p,--pod POD       Download cores matching kubernetes POD"
+	echo "  node id            Download core identified by node and id"
 	echo
 	echo "Examples:"
 	echo "  # List all cores"
@@ -363,12 +365,15 @@ function usage {
 	echo "  # Get all cores matching namespace default"
 	echo "  $cmd get -a -n default"
 	echo
+	echo "  # Get single core"
+	echo "  $cmd get workernode01 core.test.0.29162cb2ca0d4e1eb67a4ffb549ed670.995517.1645779687000000.lz4"
+	echo
 	echo "  # Status"
 	echo "  $cmd status"
 	echo
 	echo "Common options:"
-	echo "  --token=TOKEN    Accesss token"
-	echo "  -v               Verbose"
+	echo "  --token=TOKEN      Accesss token"
+	echo "  -v                 Verbose"
 	echo
 }
 
