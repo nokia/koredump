@@ -22,7 +22,7 @@ ARG PYPI_INDEX_URL=""
 
 COPY --from=builder /rpmbuild/RPMS/*/*.rpm /tmp/
 RUN dnf install -y --setopt=install_weak_deps=0 /tmp/*.rpm && rm /tmp/*.rpm \
-    && dnf install -y --setopt=install_weak_deps=0 \
+    && dnf install -y --setopt=install_weak_deps=0 --nodocs \
     python3-markupsafe \
     python3-pip \
     python3-pycparser \
