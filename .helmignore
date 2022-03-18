@@ -23,13 +23,10 @@
 .vscode/
 # project files
 app.py
-container_build
 core.*
-Dockerfile*
-helm_package
+Dockerfile
 index.yaml*
 koredumpctl
-koredump.spec
 koredump-*.tar.gz
 koredump-*.tgz
 koremonitor.py
