@@ -134,14 +134,14 @@ function cmd_list {
 		return 0
 	fi
 	local jq_cmd='def bold: "'$bold'"; def reset: "'$reset'";
-		"\(bold)- ID: \(.id)\(reset)\n"
-		+ "  \(bold)Node:\(reset) \(.node)\n"
-		+ "  \(bold)Cmdline:\(reset) \"\(.COREDUMP_CMDLINE)\"\n"
-		+ "  \(bold)COMM:\(reset) \"\(.COREDUMP_COMM)\" | \(bold)PID:\(reset) \(.COREDUMP_PID) | \(bold)UID:\(reset) \(.COREDUMP_UID) | \(bold)GID:\(reset) \(.COREDUMP_GID)\n"
-		+ "  \(bold)Pod:\(reset) \(.pod) | \(bold)Container:\(reset) \(.container) | \(bold)Namespace:\(reset) \(.namespace)\n"
-		+ "  \(bold)Image:\(reset) \(.image_name)\n"
-		+ "  \(bold)Signal:\(reset) \(.COREDUMP_SIGNAL_NAME) (\( .COREDUMP_SIGNAL // "" ))\n"
-		+ "  \(bold)Timestamp:\(reset) \(.COREDUMP_TIMESTAMP)"'
+		"\(bold)- ID: \(.id // "")\(reset)\n"
+		+ "  \(bold)Node:\(reset) \(.node // "")\n"
+		+ "  \(bold)Cmdline:\(reset) \"\(.COREDUMP_CMDLINE // "")\"\n"
+		+ "  \(bold)COMM:\(reset) \"\(.COREDUMP_COMM // "")\" | \(bold)PID:\(reset) \(.COREDUMP_PID // "") | \(bold)UID:\(reset) \(.COREDUMP_UID // "") | \(bold)GID:\(reset) \(.COREDUMP_GID // "")\n"
+		+ "  \(bold)Pod:\(reset) \(.pod // "") | \(bold)Container:\(reset) \(.container // "") | \(bold)Namespace:\(reset) \(.namespace // "")\n"
+		+ "  \(bold)Image:\(reset) \(.image_name // "")\n"
+		+ "  \(bold)Signal:\(reset) \(.COREDUMP_SIGNAL_NAME // "") (\(.COREDUMP_SIGNAL // ""))\n"
+		+ "  \(bold)Timestamp:\(reset) \(.COREDUMP_TIMESTAMP // "")"'
 	if [ "$flag_1" ]; then
 		echo "$js" | jq -r ".[-1] | $jq_cmd"
 	else
