@@ -6,7 +6,6 @@ import json
 import os
 import subprocess
 import urllib.parse
-from functools import cache
 from logging.config import dictConfig
 
 import kubernetes.client
@@ -111,13 +110,8 @@ else:
         kubernetes.config.load_incluster_config()
 
 
-@cache
-def get_k8s_client():
-    return kubernetes.client.CoreV1Api()
-
-
 def get_ds_pods():
-    return get_k8s_client().list_pod_for_all_namespaces(
+    return kubernetes.client.CoreV1Api().list_pod_for_all_namespaces(
         label_selector="koredump.daemonset=1"
     )
 
