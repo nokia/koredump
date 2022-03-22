@@ -152,7 +152,7 @@ def health():
 def filtered_core_metadata(core):
     """Filter out some internal metadata, to avoid returning them via REST API."""
     core = core.copy()
-    for key in ["_systemd_coredump", "_core_dir"]:
+    for key in ["_systemd_coredump", "_systemd_journal", "_core_dir"]:
         if key in core:
             del core[key]
     return core
