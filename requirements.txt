@@ -4,4 +4,5 @@ kubernetes
 pyinotify
 pyxattr
 PyYAML
+requests
 systemd-python
