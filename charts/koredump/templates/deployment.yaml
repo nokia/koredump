@@ -45,16 +45,9 @@ spec:
               value: "{{ .Values.ports.service }}"
             - name: KOREDUMP_DAEMONSET_PORT
               value: "{{ .Values.ports.daemonSet }}"
-            - name: USE_TOKENS
-              value: {{ if .Values.adminToken }}"1"{{ else }}"0"{{ end }}
           volumeMounts:
             - mountPath: /tmp
               name: tmp-volume
-            {{- if .Values.adminToken }}
-            - mountPath: /run/secrets/koredump
-              name: secret-tokens
-              readOnly: true
-            {{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.ports.service }}
@@ -85,8 +78,3 @@ spec:
         - name: tmp-volume
           emptyDir:
             medium: Memory
-        {{ if .Values.adminToken }}
-        - name: secret-tokens
-          secret:
-            secretName: secret-tokens
-        {{ end }}

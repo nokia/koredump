@@ -104,6 +104,7 @@ function test_core_metadata() {
 		exit 1
 	fi
 	printf "%s\n" "${green}Core metadata is OK.${reset}"
+	return 0
 }
 function test_core_get() {
 	printf "\n%s\n" "${bold}Verify core download...${reset}"
@@ -132,6 +133,21 @@ function test_core_get() {
 	fi
 	rm core.pycore.*
 	printf "%s\n" "${green}Core download is OK.${reset}"
+	return 0
+}
+function test_invalid_token() {
+	printf "\n%s\n" "${bold}koredumpctl with invalid token, expect failures...${reset}"
+
+	if koredumpctl list --token=invalid; then
+		printf "%s\n" "${red}Error: unexpected success with invalid token${reset}" >&2
+		return 1
+	fi
+	if koredumpctl get -a --token=invalid; then
+		printf "%s\n" "${red}Error: unexpected success with invalid token${reset}" >&2
+		return 1
+	fi
+	printf "%s\n" "${green}OK.${reset}"
+	return 0
 }
 function run_test() {
 	local no_uninstall="$1"
@@ -182,7 +198,7 @@ function run_test() {
 	koredumpctl status || exit
 	print_hr
 
-	printf "\n%s\n" "${bold}Run pod/coretest ...${reset}"
+	printf "\n%s\n" "${bold}kubectl run coretest --image=$test_image_name --restart=Never${reset}"
 	kubectl run coretest --image="$test_image_name" --restart=Never || exit
 
 	sleep 1
@@ -250,6 +266,8 @@ function run_test() {
 		printf "%s\n" "${red}Error: unexpected core files in output${reset}" >&2
 		exit 1
 	fi
+
+	test_invalid_token || exit
 
 	if [ -z "$no_uninstall" ]; then
 		helm_uninstall || exit

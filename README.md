@@ -13,11 +13,11 @@ This project implements REST API for accessing coredumps in Kubernetes cluster.
 - Command line utility `koredumpctl` that uses the REST API. Automatically installed in OCP to `/usr/local/bin/koredumpctl` with Kubernetes init container.
 - Note that in OCP core dumps are deleted by default after 3 days (see `systemd-tmpfiles --cat-config | grep core`).
 - Collect all coredumps in cluster by default. Limit to predefined namespaces by setting `filter.namespaceRegex` variable when installing with Helm charts.
+- Token authentication for REST API. Server uses [TokenReview](https://kubernetes.io/docs/reference/access-authn-authz/authentication/) to verify the token.
 
 ## Limitations
 
 - Red Hat OCP `privileged` [Security Context Constraint (SCC)](https://docs.openshift.com/container-platform/4.9/authentication/managing-security-context-constraints.html) is needed.
-- Optional hardcoded token authentication (`adminToken` in `values.yaml`).
 - In-cluster traffic is unencrypted HTTP.
 - Simple implementation with python3.
 - Hard requirement on systemd-coredump, core files are processed from `/var/lib/systemd/coredump` directory only.
@@ -35,7 +35,7 @@ JSON list of cores (metadata) available in cluster.
 <details>
 <summary>Example</summary>
 <pre>
-bash-5.1$ curl -fsS koreapi/apiv1/cores | jq
+bash-5.1$ curl -fsS -H "Authorization: Bearer $token" koreapi/apiv1/cores | jq
 [
   {
     "ARCH": "x86_64",
@@ -63,7 +63,7 @@ JSON metadata of single core file, identified by kubernetes node name, and core 
 <details>
 <summary>Example</summary>
 <pre>
-bash-5.1$ curl -fsS koreapi/apiv1/cores/metadata/ocp-example/core.example.9999.f1c1b6957ac9436d9113a86c8c905508.141241.1642081018000000.lz4 | jq
+bash-5.1$ curl -fsS -H "Authorization: Bearer $token" koreapi/apiv1/cores/metadata/ocp-example/core.example.9999.f1c1b6957ac9436d9113a86c8c905508.141241.1642081018000000.lz4 | jq
 {
   "ARCH": "x86_64
   "COREDUMP_CMDLINE": "/usr/bin/example -a -b -c",
@@ -86,7 +86,7 @@ Download core file, identified by kubernetes node name, and core file ID.
 <details>
 <summary>Example</summary>
 <pre>
-bash-5.1$ curl -fvsS -O koreapi/apiv1/cores/download/ocp-example/core.example.9999.f1c1b6957ac9436d9113a86c8c905508.141241.1642081018000000.lz4
+bash-5.1$ curl -fvsS -O -H "Authorization: Bearer $token" koreapi/apiv1/cores/download/ocp-example/core.example.9999.f1c1b6957ac9436d9113a86c8c905508.141241.1642081018000000.lz4
 * Connected to koreapi (172.30.199.84) port 80 (#0)
 > GET /apiv1/cores/download/ocp-example/core.example.9999.f1c1b6957ac9436d9113a86c8c905508.141241.1642081018000000.lz4 HTTP/1.1
 > Host: koreapi
@@ -175,10 +175,10 @@ helm install koredump charts/koredump/
 watch kubectl get all
 ```
 
-Run API servers locally, for example in Fedora:
+Run API servers locally without Kubernetes, for example in Fedora:
 ```bash
-USE_TOKENS=0 FLASK_DEBUG=1 FLASK_RUN_PORT=5001 DAEMONSET=1 flask run
-USE_TOKENS=0 FLASK_DEBUG=1 FLASK_RUN_PORT=5000 KOREDUMP_DAEMONSET_PORT=5001 DAEMONSET=0 FAKE_K8S=1 flask run
+NO_TOKENS=1 FLASK_DEBUG=1 PORT=5001 DAEMONSET=1 FAKE_K8S=1 gunicorn --access-logfile=- app
+NO_TOKENS=1 FLASK_DEBUG=1 PORT=5000 KOREDUMP_DAEMONSET_PORT=5001 DAEMONSET=0 FAKE_K8S=1 gunicorn --access-logfile=- app
 ```
 
 ## Links

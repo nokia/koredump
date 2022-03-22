@@ -11,7 +11,6 @@ from logging.config import dictConfig
 import kubernetes.client
 import kubernetes.config
 import requests
-import yaml
 from flask import Flask, abort, request
 from flask.helpers import send_file, send_from_directory
 from flask.json import jsonify
@@ -41,13 +40,11 @@ dictConfig(
 )
 
 application = app = Flask(__name__)
-app.config["USE_TOKENS"] = os.getenv("USE_TOKENS") == "1"
+app.config["NO_TOKENS"] = os.getenv("NO_TOKENS") == "1"
 app.config["DAEMONSET"] = os.getenv("DAEMONSET") == "1"
 if port := os.getenv("KOREDUMP_DAEMONSET_PORT"):
     app.config["DAEMONSET_PORT"] = int(port)
 auth = HTTPTokenAuth(scheme="Bearer")
-tokens = {}
-tokens_yaml = "/run/secrets/koredump/tokens.yaml"
 
 cores = {}
 cores_stat = None
@@ -61,17 +58,22 @@ decompression_methods = {
 
 @auth.verify_token
 def verify_token(token):
-    if not app.config["USE_TOKENS"]:
+    if app.config["NO_TOKENS"]:
         return True
 
-    global tokens
-    if not tokens:
-        with open(tokens_yaml) as f:
-            tokens = yaml.full_load(f)
-        app.logger.info("Loaded %d access tokens.", len(tokens))
+    if len(token) == 0:
+        return False
 
-    if token in tokens:
-        return tokens[token]
+    try:
+        body = kubernetes.client.V1TokenReview(spec={"token": token})
+        ret: kubernetes.client.V1TokenReview = (
+            kubernetes.client.AuthenticationV1Api().create_token_review(body)
+        )
+        return ret.status.authenticated
+
+    except Exception as ex:
+        app.logger.debug("Token review failed: %s", ex)
+        return False
 
 
 def read_cores():
@@ -105,9 +107,9 @@ def read_cores():
 
 if app.config["DAEMONSET"]:
     read_cores()
-else:
-    if not os.getenv("FAKE_K8S"):
-        kubernetes.config.load_incluster_config()
+
+if not os.getenv("FAKE_K8S"):
+    kubernetes.config.load_incluster_config()
 
 
 def get_ds_pods():
@@ -232,7 +234,6 @@ if app.config["DAEMONSET"]:
 else:
 
     @app.get("/apiv1/cores")
-    @auth.login_required
     def get_cores():
         headers = {"Authorization": request.headers.get("Authorization")}
         args = urllib.parse.urlencode(request.args)
@@ -241,13 +242,13 @@ else:
             url = f"http://{pod_ip}:{app.config['DAEMONSET_PORT']}/apiv1/cores?{args}"
             app.logger.debug("GET %s", url)
             resp = requests.get(url, headers=headers)
-            resp.raise_for_status()
+            if not resp.ok:
+                abort(resp.status_code)
             resp.encoding = "utf-8"
             ret.extend(resp.json())
         return jsonify(sorted_cores(ret))
 
     @app.get("/apiv1/cores/metadata/<string:node>/<string:core_id>")
-    @auth.login_required
     def get_node_core_metadata(node, core_id):
         pod_ip = get_ds_pod_ip(node)
         if not pod_ip:
@@ -256,12 +257,12 @@ else:
         url = f"http://{pod_ip}:{app.config['DAEMONSET_PORT']}/apiv1/cores/metadata/{core_id}"
         app.logger.debug("GET %s", url)
         resp = requests.get(url, headers=headers)
-        resp.raise_for_status()
+        if not resp.ok:
+            abort(resp.status_code)
         resp.encoding = "utf-8"
         return resp.json()
 
     @app.get("/apiv1/cores/download/<string:node>/<string:core_id>")
-    @auth.login_required
     def get_node_core_download(node, core_id):
         pod_ip = get_ds_pod_ip(node)
         if not pod_ip:
@@ -288,14 +289,14 @@ else:
 
         def stream_core():
             with requests.get(url, headers=headers, stream=True) as resp:
-                resp.raise_for_status()
+                if not resp.ok:
+                    abort(resp.status_code)
                 for chunk in resp.iter_content(chunk_size=64 * 1024):
                     yield chunk
 
         return app.response_class(stream_core(), headers=resp_headers)
 
     @app.delete("/apiv1/cores/delete/<string:node>/<string:core_id>")
-    @auth.login_required
     def delete_node_core(node, core_id):
         pod_ip = get_ds_pod_ip(node)
         if not pod_ip:
