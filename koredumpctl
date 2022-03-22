@@ -109,12 +109,9 @@ function kubectl_port_fwd {
 
 function cmd_list {
 	local output="$1"
-	local ret
 	local js
 	# shellcheck disable=SC2086
-	js=$(curl --proxy "" $verbose --retry 3 -f -s -S -H "$token_header" "${server}/apiv1/cores?namespace=${flag_n}&pod=${flag_p}")
-	ret=$?
-	if [ $ret -ne 0 ]; then return $ret; fi
+	js=$(curl --proxy "" $verbose --retry 3 -f -s -S -H "$token_header" "${server}/apiv1/cores?namespace=${flag_n}&pod=${flag_p}") || return
 	if [ -z "$js" ]; then return 1; fi
 	if [ "$output" = "json" ]; then
 		if [ "$flag_1" ]; then
@@ -126,9 +123,7 @@ function cmd_list {
 		fi
 	fi
 	local count
-	count=$(echo "$js" | jq -r 'length')
-	ret=$?
-	if [ $ret -ne 0 ]; then return $ret; fi
+	count=$(echo "$js" | jq -r 'length') || return
 	if [ "$count" = '0' ]; then
 		printf "%s\n" "${yellow}Nothing found.${reset}" >&2
 		return 0
