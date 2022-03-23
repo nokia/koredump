@@ -44,7 +44,7 @@ app.config["NO_TOKENS"] = os.getenv("NO_TOKENS") == "1"
 app.config["DAEMONSET"] = os.getenv("DAEMONSET") == "1"
 if port := os.getenv("KOREDUMP_DAEMONSET_PORT"):
     app.config["DAEMONSET_PORT"] = int(port)
-auth = HTTPTokenAuth(scheme="Bearer")
+auth = HTTPTokenAuth()
 
 cores = {}
 cores_stat = None
