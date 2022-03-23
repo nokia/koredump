@@ -177,8 +177,8 @@ watch kubectl get all
 
 Run API servers locally without Kubernetes, for example in Fedora:
 ```bash
-NO_TOKENS=1 FLASK_DEBUG=1 PORT=5001 DAEMONSET=1 FAKE_K8S=1 gunicorn --access-logfile=- app
-NO_TOKENS=1 FLASK_DEBUG=1 PORT=5000 KOREDUMP_DAEMONSET_PORT=5001 DAEMONSET=0 FAKE_K8S=1 gunicorn --access-logfile=- app
+NO_TOKENS=1 FLASK_ENV=development PORT=5001 DAEMONSET=1 FAKE_K8S=1 gunicorn --access-logfile=- app
+NO_TOKENS=1 FLASK_ENV=development PORT=5000 KOREDUMP_DAEMONSET_PORT=5001 DAEMONSET=0 FAKE_K8S=1 gunicorn --access-logfile=- app
 ```
 
 ## Links

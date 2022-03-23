@@ -3,10 +3,10 @@
 # SPDX-License-Identifier: MIT
 
 import json
+import logging
 import os
 import subprocess
 import urllib.parse
-from logging.config import dictConfig
 
 import kubernetes.client
 import kubernetes.config
@@ -17,29 +17,13 @@ from flask.json import jsonify
 from flask_httpauth import HTTPTokenAuth
 from werkzeug.datastructures import Headers
 
-dictConfig(
-    {
-        "version": 1,
-        "formatters": {
-            "default": {
-                "format": "[%(asctime)s] %(levelname)s in %(module)s: %(message)s",
-            }
-        },
-        "handlers": {
-            "wsgi": {
-                "class": "logging.StreamHandler",
-                "stream": "ext://flask.logging.wsgi_errors_stream",
-                "formatter": "default",
-            }
-        },
-        "root": {
-            "level": "DEBUG",
-            "handlers": ["wsgi"],
-        },
-    }
-)
-
 application = app = Flask(__name__)
+
+if __name__ != "__main__":
+    gunicorn_logger = logging.getLogger("gunicorn.error")
+    app.logger.handlers = gunicorn_logger.handlers
+    app.logger.setLevel(gunicorn_logger.level)
+
 app.config["NO_TOKENS"] = os.getenv("NO_TOKENS") == "1"
 app.config["DAEMONSET"] = os.getenv("DAEMONSET") == "1"
 if port := os.getenv("KOREDUMP_DAEMONSET_PORT"):
@@ -309,3 +293,16 @@ else:
             abort(resp.status_code)
         resp.encoding = "utf-8"
         return resp.json()
+
+
+if __name__ == "__main__":
+    #
+    # Run with Flask in development mode:
+    # NO_TOKENS=1 FLASK_ENV=development PORT=5001 DAEMONSET=1 FAKE_K8S=1 python3 ./app.py
+    # NO_TOKENS=1 FLASK_ENV=development PORT=5000 KOREDUMP_DAEMONSET_PORT=5001 DAEMONSET=0 FAKE_K8S=1 python3 ./app.py
+    #
+    # Run with Gunicorn in development mode:
+    # NO_TOKENS=1 FLASK_ENV=development PORT=5001 DAEMONSET=1 FAKE_K8S=1 gunicorn --access-logfile=- --log-level=debug app
+    # NO_TOKENS=1 FLASK_ENV=development PORT=5000 KOREDUMP_DAEMONSET_PORT=5001 DAEMONSET=0 FAKE_K8S=1 gunicorn --access-logfile=- --log-level=debug app
+    #
+    app.run(port=int(os.getenv("PORT")))
