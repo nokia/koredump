@@ -429,6 +429,10 @@ shift
 
 if [ -z "$token" ] && type oc &>/dev/null; then
 	token="$(oc whoami --show-token)"
+	if [ -z "$token" ]; then
+		printf "%s\n" "${yellow}Failed to get token with \"oc whoami --show-token\" command.${reset}" >&2
+		printf "%s\n" "Hint: you can get token from OCP web console (see \"oc whoami --show-console\")." >&2
+	fi
 fi
 if [ "$token" ]; then
 	token_header="Authorization: Bearer ${token}"
