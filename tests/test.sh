@@ -14,6 +14,7 @@ SCRIPTPATH=$(dirname "$SCRIPT")
 
 project="koredump"
 test_image_name="quay.io/rantala/pycore:latest"
+koredumpctl="$SCRIPTPATH/../koredumpctl"
 
 if [ -z "$NO_COLOR" ] && [ -t 1 ]; then
 	red=$(tput setaf 1)
@@ -30,9 +31,16 @@ function check_core_pattern() {
 }
 function cleanup_pycores() {
 	if ls /var/lib/systemd/coredump/core.pycore.* &>/dev/null; then
-		echo "Cleanup pycore core files:"
+		echo "Cleanup local core.pycore.*:"
 		sudo ls -l /var/lib/systemd/coredump/core.pycore.*
 		sudo rm /var/lib/systemd/coredump/core.pycore.*
+	fi
+	if type oc &>/dev/null; then
+		for NODE in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do
+			if [ "$NODE" = "$HOSTNAME" ]; then continue; fi
+			echo "Cleanup core.pycore.* in node/$NODE ..."
+			oc debug -q "node/$NODE" -- bash -c 'rm -f /host/var/lib/systemd/coredump/core.pycore.*'
+		done
 	fi
 }
 function delete_coretest_pod() {
@@ -73,7 +81,7 @@ function helm_uninstall() {
 function test_core_metadata() {
 	printf "\n%s\n" "${bold}Verify core metadata...${reset}"
 	local core_js namespace pod image_name signal_name comm
-	core_js=$(koredumpctl list -n koredump --pod coretest -o json -1)
+	core_js=$($koredumpctl list -n koredump --pod coretest -o json -1)
 	if [ -z "$core_js" ]; then
 		printf "%s\n" "${red}Error: missing JSON metadata for core${reset}" >&2
 		exit 1
@@ -114,7 +122,7 @@ function test_core_get() {
 	if test -f core.pycore.*; then
 		rm core.pycore.*
 	fi
-	koredumpctl get -n koredump --pod coretest -1 || exit
+	$koredumpctl get -n koredump --pod coretest -1 || exit
 	if type file &>/dev/null; then
 		file core.pycore.*
 	fi
@@ -138,11 +146,11 @@ function test_core_get() {
 function test_invalid_token() {
 	printf "\n%s\n" "${bold}koredumpctl with invalid token, expect failures...${reset}"
 
-	if koredumpctl list --token=invalid; then
+	if $koredumpctl list --token=invalid; then
 		printf "%s\n" "${red}Error: unexpected success with invalid token${reset}" >&2
 		return 1
 	fi
-	if koredumpctl get -a --token=invalid; then
+	if $koredumpctl get -a --token=invalid; then
 		printf "%s\n" "${red}Error: unexpected success with invalid token${reset}" >&2
 		return 1
 	fi
@@ -195,7 +203,7 @@ function run_test() {
 
 	print_hr
 	printf "%s\n" "${bold}koredumpctl status:${reset}"
-	koredumpctl status || exit
+	$koredumpctl status || exit
 	print_hr
 
 	printf "\n%s\n" "${bold}kubectl run coretest --image=$test_image_name --restart=Never${reset}"
@@ -225,7 +233,7 @@ function run_test() {
 	if [ "$expect_core" ]; then
 		secs=300
 		echo "Core file expected: waiting up to ${secs}s for core file to be available ..."
-		while test "$(koredumpctl list -n koredump --pod coretest -o json | jq -r 'length')" -lt 1; do
+		while test "$($koredumpctl list -n koredump --pod coretest -o json | jq -r 'length')" -lt 1; do
 			sleep 3
 			secs=$((secs - 3))
 			if [ $secs -le 0 ]; then
@@ -236,7 +244,7 @@ function run_test() {
 	else
 		secs=60
 		echo "Core file not expected: waiting ${secs}s to verify that core not collected ..."
-		while test "$(koredumpctl list -n koredump --pod coretest -o json | jq -r 'length')" -eq 0; do
+		while test "$($koredumpctl list -n koredump --pod coretest -o json | jq -r 'length')" -eq 0; do
 			sleep 3
 			secs=$((secs - 3))
 			if [ $secs -le 0 ]; then
@@ -250,7 +258,7 @@ function run_test() {
 	fi
 
 	printf "\n%s\n" "${bold}koredumpctl list:${reset}"
-	koredumpctl list || exit
+	$koredumpctl list || exit
 
 	if [ "$expect_core" ]; then
 		test_core_metadata || exit
@@ -259,9 +267,9 @@ function run_test() {
 	cleanup_pycores
 
 	printf "\n%s\n" "${bold}koredumpctl list:${reset}"
-	koredumpctl list || exit
+	$koredumpctl list || exit
 
-	core_count=$(koredumpctl list -n koredump --pod coretest -o json | jq -r 'length')
+	core_count=$($koredumpctl list -n koredump --pod coretest -o json | jq -r 'length')
 	if [ "$core_count" -gt 0 ]; then
 		printf "%s\n" "${red}Error: unexpected core files in output${reset}" >&2
 		exit 1
