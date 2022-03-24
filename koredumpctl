@@ -45,6 +45,9 @@ if [ -f values.yaml ]; then
 fi
 
 function koredump_namespace {
+	if ! type helm &>/dev/null; then
+		return
+	fi
 	helm list -A --filter=koredump -m1 -o json | jq -r '.[0].namespace // empty'
 }
 
@@ -52,7 +55,7 @@ function kubectl_port_fwd {
 	if [ "$KUBERNETES_SERVICE_HOST" ]; then
 		return 0
 	fi
-	if ! type kubectl &>/dev/null || ! type helm &>/dev/null; then
+	if ! type kubectl &>/dev/null; then
 		return 0
 	fi
 	# Pick random port, to allow multiple users to use this tool concurrently.
