@@ -35,6 +35,13 @@ flag_p=  # pod
 flag_d=  # uncompressed cores
 verbose=
 
+if [ -z "$version" ] && type git &>/dev/null; then
+	version=$(git -C "$(dirname "$0")" describe --tags 2>/dev/null)
+fi
+
+curl_agent=$(curl --version | head -1 | cut -d ' ' -f1-2 | tr ' ' '/')
+curl_agent+=" koredumpctl/${version}"
+
 if [ "$KUBERNETES_SERVICE_HOST" ]; then
 	server="http://koreapi.koredump.svc.cluster.local"
 else
@@ -135,7 +142,8 @@ function cmd_list {
 	local output="$1"
 	local js
 	# shellcheck disable=SC2086
-	js=$(curl --proxy "" $verbose --retry 3 -f -s -S -H "$token_header" "${server}/apiv1/cores?namespace=${flag_n}&pod=${flag_p}") || return
+	js=$(curl --proxy "" $verbose -A "$curl_agent" --retry 3 -f -s -S -H "$token_header" \
+		"${server}/apiv1/cores?namespace=${flag_n}&pod=${flag_p}") || return
 	if [ -z "$js" ]; then return 1; fi
 	if [ "$output" = "json" ]; then
 		if [ "$flag_1" ]; then
@@ -175,7 +183,7 @@ function get_core {
 		return 1
 	fi
 	# shellcheck disable=SC2086
-	curl --proxy "" $verbose --retry 3 -f -s -S -H "$token_header" \
+	curl --proxy "" $verbose -A "$curl_agent" --retry 3 -f -s -S -H "$token_header" \
 		"${server}/apiv1/cores/download/${node}/${core_id}" -o "$core_id" || return
 	local size
 	size=$(stat -c "%s" "$core_id")
@@ -189,7 +197,7 @@ function get_core {
 	metafile="${metafile}.json"
 	local js
 	# shellcheck disable=SC2086
-	js=$(curl --proxy "" $verbose --retry 3 -f -s -S -H "$token_header" \
+	js=$(curl --proxy "" $verbose -A "$curl_agent" --retry 3 -f -s -S -H "$token_header" \
 		"${server}/apiv1/cores/metadata/${node}/${core_id}")
 	echo "$js" | jq >"$metafile"
 	size=$(stat -c "%s" "$metafile")
@@ -208,7 +216,7 @@ function get_core {
 		core_id_d="${core_id_d%.zst}"
 		if [ "$core_id_d" != "$core_id" ]; then
 			# shellcheck disable=SC2086
-			curl --proxy "" $verbose --retry 3 -f -s -S -H "$token_header" \
+			curl --proxy "" $verbose -A "$curl_agent" --retry 3 -f -s -S -H "$token_header" \
 				"${server}/apiv1/cores/download/${node}/${core_id}?decompress=true" -o "$core_id_d" || return
 			size=$(stat -c "%s" "$core_id_d")
 			if [ "$size" = "0" ]; then
@@ -310,7 +318,7 @@ function cmd_status {
 	kubectl -n "$koredump_ns" get pod -o wide -l koredump.daemonset=1 --sort-by='{.spec.nodeName}'
 	echo
 	# shellcheck disable=SC2086
-	js=$(curl --proxy "" $verbose --retry 3 -f -s -S -H "$token_header" "${server}/apiv1/cores")
+	js=$(curl --proxy "" $verbose -A "$curl_agent" --retry 3 -f -s -S -H "$token_header" "${server}/apiv1/cores")
 	core_count=$(echo "$js" | jq -r 'length' 2>/dev/null)
 	printf "%s %s\n\n" "${bold}Core count in cluster:${reset}" "$core_count"
 	printf "%s %s\n\n" "${bold}$(basename "$0") version:${reset}" "$version"
