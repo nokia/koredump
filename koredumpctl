@@ -48,6 +48,30 @@ function koredump_namespace {
 	helm list -A --filter=koredump -m1 -o json | jq -r '.[0].namespace // empty'
 }
 
+# Check if there is OCP route to API, e.g. done with "oc expose service koreapi" command.
+function check_route {
+	if [ "$KUBERNETES_SERVICE_HOST" ]; then
+		return 0
+	fi
+	if ! type oc &>/dev/null; then
+		return 1
+	fi
+
+	# shellcheck disable=SC2155
+	local koredump_ns=$(koredump_namespace)
+	if [ -z "$koredump_ns" ]; then koredump_ns="koredump"; fi
+
+	# shellcheck disable=SC2155
+	local koreapi_route=$(oc get --namespace "$koredump_ns" routes/koreapi -o jsonpath='{.spec.host}' 2>/dev/null)
+	if [ -z "$koreapi_route" ]; then
+		return 1
+	fi
+
+	server="http://${koreapi_route}"
+	if [ "$verbose" ]; then echo "Connecting to koredump API at ${server}" >&2; fi
+	return 0
+}
+
 function kubectl_port_fwd {
 	if [ "$KUBERNETES_SERVICE_HOST" ]; then
 		return 0
@@ -441,8 +465,10 @@ fi
 # Core dumps can contain sensitive data, avoid wide permissions.
 umask -S g=,o= >/dev/null
 
-if ! kubectl_port_fwd; then
-	echo "Warning: failed to kubectl port-forward to access koredump in k8s cluster." >&2
+if ! check_route; then
+	if ! kubectl_port_fwd; then
+		echo "Warning: failed to kubectl port-forward to access koredump in k8s cluster." >&2
+	fi
 fi
 
 case "$subcommand" in
