@@ -47,7 +47,7 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["/usr/libexec/koredump/python3"]
-          args: ["/usr/bin/gunicorn", "--chdir=/usr/libexec/koredump", "app"]
+          args: ["/usr/bin/gunicorn", "--chdir=/usr/libexec/koredump", "--access-logfile=-", "app"]
           env:
             - name: FLASK_DEBUG
               value: "{{ .Values.flaskDebug }}"
