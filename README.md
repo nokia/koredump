@@ -1,6 +1,11 @@
 # Coredump REST API for Kubernetes
 
-This project implements REST API for accessing coredumps in Kubernetes cluster.
+koredump enables easy access to core dumps in a Kubernetes cluster.
+REST API and command line tools are provided, that allow user to get information
+on core dumps in a cluster, and to download the core dump files.
+
+Core dumps are captured and stored on disk by the infra platform, and koredump supports Red Hat OCP
+that uses the [`systemd-coredump`](https://www.freedesktop.org/software/systemd/man/systemd-coredump.html) service.
 
 ## Design
 
