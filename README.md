@@ -111,11 +111,6 @@ bash-5.1$ curl -fvsS -O -H "Authorization: Bearer $token" koreapi/apiv1/cores/do
 
 ## Install and run in Red Hat OCP
 
-Generate coredump (should be then visible in `coredumpctl` output):
-```bash
-kubectl run -it segfaulter --image=quay.io/icdh/segfaulter --restart=Never
-```
-
 Install (in Red Hat OCP as `core` user):
 ```bash
 oc new-project koredump
