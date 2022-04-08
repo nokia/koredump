@@ -50,7 +50,8 @@ RUN sed -i -e "s/^version=.*/version=${VERSION}/" /usr/bin/koredumpctl \
     zstd \
     && groupadd -g 900 koredump \
     && useradd -r -u 900 -g koredump -M -s /sbin/nologin koredump \
-    && pip3 install --disable-pip-version-check --no-cache-dir -r /koredump/requirements.txt gunicorn \
+    && pip3 install --disable-pip-version-check --no-cache-dir -r /koredump/requirements.txt \
+    && pip3 check \
     && rm /koredump/requirements.txt \
     && mv /usr/local/bin/gunicorn /usr/bin/ \
     && dnf remove -y \
