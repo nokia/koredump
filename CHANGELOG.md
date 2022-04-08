@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Changed
 - REST API access now requires valid Kubernetes token. `koredumpctl` tool can take it from `oc whoami --show-token` command output in Red Hat OCP.
-- Switch container base image to Red Hat UBI8. Container build is reworked and python dependencies now installed with pip.
+- Switch container base image to Red Hat UBI8. Container build is reworked and python dependencies now installed with pip. Container images are now built to amd64, arm64, ppc64le and s390x.
 - Collection of core files from given namespaces only, see Helm chart `filter.namespaceRegex` variable. The variable can be defined when koredump is installed into Kubernetes cluster.
 - `koredumpctl` tool shows more information in list command output.
 - `koredumpctl` tool can automatically connect to exposed REST API, that was exposed with OCP routes, instead of doing port forward.
