@@ -101,5 +101,3 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
-
-#adminToken: ...

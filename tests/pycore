@@ -11,7 +11,7 @@ import mmap
 import os
 import sys
 
-MAP_HUGETLB = 0x040000
+# MAP_HUGETLB = 0x040000
 max_mem = 5
 
 print("PID:", os.getpid())
@@ -19,16 +19,16 @@ print("PID:", os.getpid())
 with open("/proc/meminfo") as f:
     for line in f:
         if line.startswith("MemAvailable:"):
-            availGB = int(int(line.split()[1]) / 1024 ** 2)
+            availGB = round(int(line.split()[1]) / 1024 ** 2)
 
 print(f"MemAvailable: {availGB}GB", flush=True)
 
-if availGB <= 0:
+if availGB <= 1:
     print("Error: not enough memory available", file=sys.stderr)
     sys.exit(1)
 
-if availGB < max_mem:
-    max_mem = availGB
+# Try not to consume all available memory to avoid OOM.
+max_mem = min(max_mem, availGB - 1)
 
 print(f"Allocating {max_mem}GB memory", flush=True)
 mmaps = []

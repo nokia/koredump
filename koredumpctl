@@ -27,32 +27,63 @@ if [ -t 1 ]; then
 fi
 
 version= # Filled on install.
-token=
-flag_1= # latest core
-flag_a= # all cores
-flag_n= # namespace
-flag_p= # pod
-flag_d= # uncompressed cores
+token=   # Bearer token for authentication to the koredump API server
+flag_1=  # latest core
+flag_a=  # all cores
+flag_n=  # namespace
+flag_p=  # pod
+flag_d=  # uncompressed cores
 verbose=
+
+if [ -z "$version" ] && type git &>/dev/null; then
+	version=$(git -C "$(dirname "$0")" describe --tags 2>/dev/null)
+fi
+
+curl_agent=$(curl --version | head -1 | cut -d ' ' -f1-2 | tr ' ' '/')
+curl_agent+=" koredumpctl/${version}"
 
 if [ "$KUBERNETES_SERVICE_HOST" ]; then
 	server="http://koreapi.koredump.svc.cluster.local"
 else
 	server="http://127.0.0.1:5000"
 fi
-if [ -f values.yaml ]; then
-	token="$(grep -m1 ^adminToken values.yaml | cut -d ' ' -f2)"
-fi
 
 function koredump_namespace {
+	if ! type helm &>/dev/null; then
+		return
+	fi
 	helm list -A --filter=koredump -m1 -o json | jq -r '.[0].namespace // empty'
+}
+
+# Check if there is OCP route to API, e.g. done with "oc expose service koreapi" command.
+function check_route {
+	if [ "$KUBERNETES_SERVICE_HOST" ]; then
+		return 0
+	fi
+	if ! type oc &>/dev/null; then
+		return 1
+	fi
+
+	# shellcheck disable=SC2155
+	local koredump_ns=$(koredump_namespace)
+	if [ -z "$koredump_ns" ]; then koredump_ns="koredump"; fi
+
+	# shellcheck disable=SC2155
+	local koreapi_route=$(oc get --namespace "$koredump_ns" routes/koreapi -o jsonpath='{.spec.host}' 2>/dev/null)
+	if [ -z "$koreapi_route" ]; then
+		return 1
+	fi
+
+	server="http://${koreapi_route}"
+	if [ "$verbose" ]; then echo "Connecting to koredump API at ${server}" >&2; fi
+	return 0
 }
 
 function kubectl_port_fwd {
 	if [ "$KUBERNETES_SERVICE_HOST" ]; then
 		return 0
 	fi
-	if ! type kubectl &>/dev/null || ! type helm &>/dev/null; then
+	if ! type kubectl &>/dev/null; then
 		return 0
 	fi
 	# Pick random port, to allow multiple users to use this tool concurrently.
@@ -109,16 +140,14 @@ function kubectl_port_fwd {
 
 function cmd_list {
 	local output="$1"
-	local ret
 	local js
 	# shellcheck disable=SC2086
-	js=$(curl --proxy "" $verbose --retry 3 -f -s -S -H "$token_header" "${server}/apiv1/cores?namespace=${flag_n}&pod=${flag_p}")
-	ret=$?
-	if [ $ret -ne 0 ]; then return $ret; fi
+	js=$(curl --proxy "" $verbose -A "$curl_agent" --retry 3 -f -s -S -H "$token_header" \
+		"${server}/apiv1/cores?namespace=${flag_n}&pod=${flag_p}") || return
 	if [ -z "$js" ]; then return 1; fi
 	if [ "$output" = "json" ]; then
 		if [ "$flag_1" ]; then
-			echo "$js" | jq -r '.[-1]'
+			jq -r '.[-1]' <<<"$js"
 			return
 		else
 			printf "%s\n" "$js"
@@ -126,26 +155,24 @@ function cmd_list {
 		fi
 	fi
 	local count
-	count=$(echo "$js" | jq -r 'length')
-	ret=$?
-	if [ $ret -ne 0 ]; then return $ret; fi
+	count=$(jq -r 'length' <<<"$js") || return
 	if [ "$count" = '0' ]; then
 		printf "%s\n" "${yellow}Nothing found.${reset}" >&2
 		return 0
 	fi
 	local jq_cmd='def bold: "'$bold'"; def reset: "'$reset'";
-		"\(bold)- ID: \(.id)\(reset)\n"
-		+ "  \(bold)Node:\(reset) \(.node)\n"
-		+ "  \(bold)Cmdline:\(reset) \"\(.COREDUMP_CMDLINE)\"\n"
-		+ "  \(bold)COMM:\(reset) \"\(.COREDUMP_COMM)\" | \(bold)PID:\(reset) \(.COREDUMP_PID) | \(bold)UID:\(reset) \(.COREDUMP_UID) | \(bold)GID:\(reset) \(.COREDUMP_GID)\n"
-		+ "  \(bold)Pod:\(reset) \(.pod) | \(bold)Container:\(reset) \(.container) | \(bold)Namespace:\(reset) \(.namespace)\n"
-		+ "  \(bold)Image:\(reset) \(.image_name)\n"
-		+ "  \(bold)Signal:\(reset) \(.COREDUMP_SIGNAL_NAME) (\( .COREDUMP_SIGNAL // "" ))\n"
-		+ "  \(bold)Timestamp:\(reset) \(.COREDUMP_TIMESTAMP)"'
+		"\(bold)- ID: \(.id // "")\(reset)\n"
+		+ "  \(bold)Node:\(reset) \(.node // "")\n"
+		+ "  \(bold)Cmdline:\(reset) \"\(.COREDUMP_CMDLINE // "")\"\n"
+		+ "  \(bold)COMM:\(reset) \"\(.COREDUMP_COMM // "")\" | \(bold)PID:\(reset) \(.COREDUMP_PID // "") | \(bold)UID:\(reset) \(.COREDUMP_UID // "") | \(bold)GID:\(reset) \(.COREDUMP_GID // "")\n"
+		+ "  \(bold)Pod:\(reset) \(.pod // "") | \(bold)Container:\(reset) \(.container // "") | \(bold)Namespace:\(reset) \(.namespace // "")\n"
+		+ "  \(bold)Image:\(reset) \(.image_name // "")\n"
+		+ "  \(bold)Signal:\(reset) \(.COREDUMP_SIGNAL_NAME // "") (\(.COREDUMP_SIGNAL // ""))\n"
+		+ "  \(bold)Timestamp:\(reset) \(.COREDUMP_TIMESTAMP // "")"'
 	if [ "$flag_1" ]; then
-		echo "$js" | jq -r ".[-1] | $jq_cmd"
+		jq -r ".[-1] | $jq_cmd" <<<"$js"
 	else
-		echo "$js" | jq -r ".[] | $jq_cmd"
+		jq -r ".[] | $jq_cmd" <<<"$js"
 	fi
 }
 
@@ -156,7 +183,7 @@ function get_core {
 		return 1
 	fi
 	# shellcheck disable=SC2086
-	curl --proxy "" $verbose --retry 3 -f -s -S -H "$token_header" \
+	curl --proxy "" $verbose -A "$curl_agent" --retry 3 -f -s -S -H "$token_header" \
 		"${server}/apiv1/cores/download/${node}/${core_id}" -o "$core_id" || return
 	local size
 	size=$(stat -c "%s" "$core_id")
@@ -170,9 +197,9 @@ function get_core {
 	metafile="${metafile}.json"
 	local js
 	# shellcheck disable=SC2086
-	js=$(curl --proxy "" $verbose --retry 3 -f -s -S -H "$token_header" \
+	js=$(curl --proxy "" $verbose -A "$curl_agent" --retry 3 -f -s -S -H "$token_header" \
 		"${server}/apiv1/cores/metadata/${node}/${core_id}")
-	echo "$js" | jq >"$metafile"
+	jq <<<"$js" >"$metafile"
 	size=$(stat -c "%s" "$metafile")
 	if [ "$size" = "0" ]; then
 		rm "$metafile" || true
@@ -182,14 +209,14 @@ function get_core {
 		printf "%s\n" "${green}${metafile} metadata ${size} kB.${reset}"
 	fi
 
-	if [ "$flag_d" ] && echo "$core_id" | grep -q -e '.lz4$' -e '.xz$' -e '.zst$'; then
+	if [ "$flag_d" ] && grep -q -e '.lz4$' -e '.xz$' -e '.zst$' <<<"$core_id"; then
 		local core_id_d="$core_id"
 		core_id_d="${core_id_d%.lz4}"
 		core_id_d="${core_id_d%.xz}"
 		core_id_d="${core_id_d%.zst}"
 		if [ "$core_id_d" != "$core_id" ]; then
 			# shellcheck disable=SC2086
-			curl --proxy "" $verbose --retry 3 -f -s -S -H "$token_header" \
+			curl --proxy "" $verbose -A "$curl_agent" --retry 3 -f -s -S -H "$token_header" \
 				"${server}/apiv1/cores/download/${node}/${core_id}?decompress=true" -o "$core_id_d" || return
 			size=$(stat -c "%s" "$core_id_d")
 			if [ "$size" = "0" ]; then
@@ -216,15 +243,15 @@ function cmd_get {
 	fi
 	if [ "$flag_1" ]; then
 		local js count line
-		js=$(cmd_list "json")
-		count=$(echo "$js" | jq -r 'length')
+		js=$(cmd_list "json") || return
+		count=$(jq -r 'length' <<<"$js")
 		if [ "$count" = '0' ]; then
 			printf "%s\n" "${yellow}Nothing found.${reset}" >&2
 			return 0
 		fi
-		line=$(echo "$js" | jq -r '.node + ";" + .id')
-		node=$(echo "$line" | cut -d';' -f1)
-		core_id=$(echo "$line" | cut -d';' -f2-)
+		line=$(jq -r '.node + ";" + .id' <<<"$js")
+		node=$(cut -d';' -f1 <<<"$line")
+		core_id=$(cut -d';' -f2- <<<"$line")
 		if [ -z "$node" ] || [ -z "$core_id" ]; then
 			printf "%s\n" "${red}Error: unable to detect node name and core ID of latest core${reset}" >&2
 			exit 1
@@ -232,11 +259,12 @@ function cmd_get {
 	elif [ "$flag_a" ]; then
 		local js
 		local failcnt=0
-		for line in $(cmd_list "json" | jq -r '.[] | .node + ";" + .id + ";" + .namespace + ";" + .pod'); do
-			node=$(echo "$line" | cut -d';' -f1)
-			core_id=$(echo "$line" | cut -d';' -f2)
-			namespace=$(echo "$line" | cut -d';' -f3)
-			pod=$(echo "$line" | cut -d';' -f4)
+		js=$(cmd_list "json") || return
+		for line in $(jq -r '.[] | .node + ";" + .id + ";" + .namespace + ";" + .pod' <<<"$js"); do
+			node=$(cut -d';' -f1 <<<"$line")
+			core_id=$(cut -d';' -f2 <<<"$line")
+			namespace=$(cut -d';' -f3 <<<"$line")
+			pod=$(cut -d';' -f4 <<<"$line")
 			if [ "$flag_n" ] && [ "$namespace" != "$flag_n" ]; then
 				continue
 			fi
@@ -261,7 +289,7 @@ function cmd_get {
 		echo "Error: missing core ID" >&2
 		return 1
 	fi
-	if echo "$core_id" | grep -q -F -e "/"; then
+	if grep -q -F -e "/" <<<"$core_id"; then
 		echo "Error: invalid core ID" >&2
 		return
 	fi
@@ -290,8 +318,8 @@ function cmd_status {
 	kubectl -n "$koredump_ns" get pod -o wide -l koredump.daemonset=1 --sort-by='{.spec.nodeName}'
 	echo
 	# shellcheck disable=SC2086
-	js=$(curl --proxy "" $verbose --retry 3 -f -s -S -H "$token_header" "${server}/apiv1/cores")
-	core_count=$(echo "$js" | jq -r 'length' 2>/dev/null)
+	js=$(curl --proxy "" $verbose -A "$curl_agent" --retry 3 -f -s -S -H "$token_header" "${server}/apiv1/cores")
+	core_count=$(jq -r 'length' <<<"$js" 2>/dev/null)
 	printf "%s %s\n\n" "${bold}Core count in cluster:${reset}" "$core_count"
 	printf "%s %s\n\n" "${bold}$(basename "$0") version:${reset}" "$version"
 	if [ "$HELM_CHART_URL" ]; then
@@ -318,7 +346,7 @@ function cmd_status {
 	fi
 	printf "%s\n" "${bold}/proc/sys/kernel/core_pattern [HOSTNAME=${HOSTNAME}]:${reset}"
 	read -r core_pattern </proc/sys/kernel/core_pattern
-	if echo "$core_pattern" | grep -q "^|/usr/lib/systemd/systemd-coredump"; then
+	if grep -q "^|/usr/lib/systemd/systemd-coredump" <<<"$core_pattern"; then
 		printf "  %s\n" "${green}${core_pattern}${reset}"
 	else
 		printf "  %s\n" "$core_pattern"
@@ -334,21 +362,23 @@ function usage {
 	echo "Access core dumps in kubernetes cluster."
 	echo
 	echo "Commands:"
-	echo "  list             List all cores in kubernetes cluster"
-	echo "  get              Download cores"
-	echo "  status           Show status and version information"
+	echo "  list               List all cores in kubernetes cluster"
+	echo "  get                Download cores"
+	echo "  status             Show status and version information"
 	echo
 	echo "list options:"
-	echo "  -o json          Output format (default human)"
-	echo "  -1               Show latest core only"
+	echo "  -o json            Output format (default human)"
+	echo "  -1                 Show latest core only"
+	echo "  -n,--namespace NS  List cores matching kubernetes namespace"
+	echo "  -p,--pod POD       List cores matching kubernetes POD"
 	echo
 	echo "get options:"
-	echo "  -1               Download latest core"
-	echo "  -a               Download all cores"
-	echo "  -d               Download uncompressed core(s)"
-	echo "  -n,--namespace N Download cores matching kubernetes namespace"
-	echo "  -p,--pod POD     Download cores matching kubernetes POD"
-	echo "  node id          Download core identified by node and id"
+	echo "  -1                 Download latest core"
+	echo "  -a                 Download all cores"
+	echo "  -d                 Download uncompressed core(s)"
+	echo "  -n,--namespace NS  Download cores matching kubernetes namespace"
+	echo "  -p,--pod POD       Download cores matching kubernetes POD"
+	echo "  node id            Download core identified by node and id"
 	echo
 	echo "Examples:"
 	echo "  # List all cores"
@@ -363,12 +393,15 @@ function usage {
 	echo "  # Get all cores matching namespace default"
 	echo "  $cmd get -a -n default"
 	echo
+	echo "  # Get single core"
+	echo "  $cmd get workernode01 core.test.0.29162cb2ca0d4e1eb67a4ffb549ed670.995517.1645779687000000.lz4"
+	echo
 	echo "  # Status"
 	echo "  $cmd status"
 	echo
 	echo "Common options:"
-	echo "  --token=TOKEN    Accesss token"
-	echo "  -v               Verbose"
+	echo "  --token=TOKEN      Accesss token"
+	echo "  -v                 Verbose"
 	echo
 }
 
@@ -426,6 +459,13 @@ if [ -z "$subcommand" ]; then
 fi
 shift
 
+if [ -z "$token" ] && type oc &>/dev/null; then
+	token="$(oc whoami --show-token)"
+	if [ -z "$token" ]; then
+		printf "%s\n" "${yellow}Failed to get token with \"oc whoami --show-token\" command.${reset}" >&2
+		printf "%s\n" "Hint: you can get token from OCP web console (see \"oc whoami --show-console\")." >&2
+	fi
+fi
 if [ "$token" ]; then
 	token_header="Authorization: Bearer ${token}"
 fi
@@ -433,8 +473,10 @@ fi
 # Core dumps can contain sensitive data, avoid wide permissions.
 umask -S g=,o= >/dev/null
 
-if ! kubectl_port_fwd; then
-	echo "Warning: failed to kubectl port-forward to access koredump in k8s cluster." >&2
+if ! check_route; then
+	if ! kubectl_port_fwd; then
+		echo "Warning: failed to kubectl port-forward to access koredump in k8s cluster." >&2
+	fi
 fi
 
 case "$subcommand" in

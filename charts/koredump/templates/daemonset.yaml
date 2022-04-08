@@ -47,7 +47,7 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["/usr/libexec/koredump/python3"]
-          args: ["/usr/bin/gunicorn", "--chdir=/usr/libexec/koredump", "app"]
+          args: ["/usr/bin/gunicorn", "--chdir=/usr/libexec/koredump", "--access-logfile=-", "app"]
           env:
             - name: FLASK_DEBUG
               value: "{{ .Values.flaskDebug }}"
@@ -57,8 +57,6 @@ spec:
               value: "{{ .Values.ports.daemonSet }}"
             - name: DAEMONSET
               value: "1"
-            - name: USE_TOKENS
-              value: {{ if .Values.adminToken }}"1"{{ else }}"0"{{ end }}
           volumeMounts:
             - mountPath: /tmp
               name: tmp-volume
@@ -67,11 +65,6 @@ spec:
             - mountPath: /var/lib/systemd/coredump
               name: var-lib-systemd-coredump
               readOnly: true
-            {{- if .Values.adminToken }}
-            - mountPath: /run/secrets/koredump
-              name: secret-tokens
-              readOnly: true
-            {{ end }}
           ports:
             - name: http
               containerPort: {{ .Values.ports.daemonSet }}
@@ -161,11 +154,6 @@ spec:
           hostPath:
             path: /run/containers
             type: DirectoryOrCreate
-        {{- if .Values.adminToken }}
-        - name: secret-tokens
-          secret:
-            secretName: secret-tokens
-        {{- end }}
         {{- if .Values.filter }}
         - name: koremonitor-config
           configMap:

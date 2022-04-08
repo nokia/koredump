@@ -15,10 +15,10 @@ with open("requirements.txt") as f:
 with open("README.md") as f:
     long_description = f.read()
 
-with open("koredump.spec") as f:
+with open("Dockerfile") as f:
     for line in f:
-        if line.startswith("Version:"):
-            version = line.partition(":")[2].strip()
+        if line.startswith("ARG VERSION="):
+            version = line.partition("=")[2].strip()
             break
 
 setup(

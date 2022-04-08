@@ -2,51 +2,68 @@
 # Licensed under the MIT License
 # SPDX-License-Identifier: MIT
 
-ARG BASE_IMAGE=quay.io/fedora/fedora:35
-FROM $BASE_IMAGE AS base
-RUN sed -i -e 's|enabled=1|enabled=0|' \
-    /etc/yum.repos.d/fedora-cisco-openh264.repo /etc/yum.repos.d/fedora-*modular.repo \
-    && dnf upgrade -y --setopt=install_weak_deps=0 && dnf clean all
+FROM registry.access.redhat.com/ubi8/ubi:8.5 AS base
+MAINTAINER Nokia
 
-# Build RPMs
-FROM base AS builder
-RUN dnf install -y --setopt=install_weak_deps=0 dnf-plugins-core rpm-build
-COPY app.py koredumpctl koremonitor.py LICENSE README.md /rpmbuild/SOURCES/
-COPY koredump.spec /rpmbuild/SPECS/
-RUN dnf builddep -y --setopt=install_weak_deps=0 --spec /rpmbuild/SPECS/koredump.spec \
-    && rpmbuild --define "_topdir /rpmbuild" -ba /rpmbuild/SPECS/koredump.spec
+ARG VERSION=0.3.4
 
-# Build container
-FROM base
-ARG PYPI_INDEX_URL=""
+# Required OpenShift Labels
+LABEL name="koredump" \
+      maintainer="tommi.t.rantala@nokia.com" \
+      vendor="Nokia" \
+      version="$VERSION" \
+      release="1" \
+      summary="Kubernetes coredump REST API" \
+      description="Kubernetes coredump REST API" \
+      io.k8s.description="Kubernetes coredump REST API" \
+      io.k8s.display-name="koredump" \
+      url="https://github.com/nokia/koredump" \
+      license="MIT"
 
-COPY --from=builder /rpmbuild/RPMS/*/*.rpm /tmp/
-RUN dnf install -y --setopt=install_weak_deps=0 /tmp/*.rpm && rm /tmp/*.rpm \
-    && dnf install -y --setopt=install_weak_deps=0 \
-    python3-markupsafe \
-    python3-pip \
-    python3-pycparser \
-    python3-setuptools \
-    python3-six \
-    shadow-utils \
-    libcap \
-    && groupadd -g 900 koredump \
-    && useradd -r -u 900 -g koredump -M -s /sbin/nologin koredump \
-    && dnf remove -y shadow-utils \
-    && dnf clean all
+# Licenses for OpenShift
+COPY LICENSE /licenses
 
 COPY requirements.txt /koredump/
-RUN pip3 install --disable-pip-version-check --no-cache-dir $PYPI_INDEX_URL -r /koredump/requirements.txt \
+COPY app.py /usr/libexec/koredump/
+COPY koredumpctl /usr/bin/
+COPY koremonitor.py /usr/bin/
+RUN sed -i -e "s/^version=.*/version=${VERSION}/" /usr/bin/koredumpctl \
+    && dnf upgrade -y --setopt=install_weak_deps=0 \
+    && dnf install -y --setopt=install_weak_deps=0 --nodocs \
+    gcc \
+    libcap \
+    pkg-config \
+    python39-devel \
+    python39-devel \
+    python39-pip \
+    python39-pycparser \
+    python39-setuptools \
+    python39-six \
+    python39-wheel \
+    shadow-utils \
+    systemd-devel \
+    jq \
+    /usr/bin/getopt \
+    /usr/bin/tput \
+    lz4 \
+    xz \
+    zstd \
+    && groupadd -g 900 koredump \
+    && useradd -r -u 900 -g koredump -M -s /sbin/nologin koredump \
+    && pip3 install --disable-pip-version-check --no-cache-dir -r /koredump/requirements.txt \
+    && pip3 check \
     && rm /koredump/requirements.txt \
-    && dnf remove -y python3-pip
+    && mv /usr/local/bin/gunicorn /usr/bin/ \
+    && dnf remove -y \
+    gcc \
+    pkg-config \
+    python39-devel \
+    python39-pip \
+    shadow-utils \
+    systemd-devel \
+    && dnf clean all
 
 # Special copy of python3 executable with CAP_DAC_OVERRIDE, needed in DaemonSet
 # containers to access core dump files and journal logs as non-root user.
 RUN install --mode=0550 --group=koredump /usr/bin/python3 /usr/libexec/koredump/python3 \
     && setcap cap_dac_override+eip /usr/libexec/koredump/python3
-
-LABEL maintainer="tommi.t.rantala@nokia.com"
-
-LABEL license="MIT"
-LABEL name="koredump"
-LABEL vendor="Nokia"

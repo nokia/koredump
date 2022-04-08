@@ -23,11 +23,7 @@ Licensed under the MIT License
 watch kubectl get all -n {{ .Release.Namespace }}
 
 2. Run koredumpctl in-cluster:
-{{- if .Values.adminToken }}
-kubectl exec -n {{ .Release.Namespace }} $(kubectl get pods -n {{ .Release.Namespace }} -l koredump.service=1 -o jsonpath='{ .items[0].metadata.name }') -- koredumpctl --token="$(grep -m1 adminToken values.yaml | cut -d: -f2-)" list
-{{ else }}
-kubectl exec -n {{ .Release.Namespace }} $(kubectl get pods -n {{ .Release.Namespace }} -l koredump.service=1 -o jsonpath='{ .items[0].metadata.name }') -- koredumpctl list
-{{- end }}
+kubectl exec -n {{ .Release.Namespace }} $(kubectl get pods -n {{ .Release.Namespace }} -l koredump.service=1 -o jsonpath='{ .items[0].metadata.name }') -- koredumpctl --token="$(oc whoami -t)" list
 
 3. Run koredumpctl (installed to /usr/local/bin, does automatic port-forward to cluster):
 koredumpctl status

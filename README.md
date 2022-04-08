@@ -1,6 +1,11 @@
 # Coredump REST API for Kubernetes
 
-This project implements REST API for accessing coredumps in Kubernetes cluster.
+koredump enables easy access to core dumps in a Kubernetes cluster.
+REST API and command line tools are provided, that allow user to get information
+on core dumps in a cluster, and to download the core dump files.
+
+Core dumps are captured and stored on disk by the infra platform, and koredump supports Red Hat OCP
+that uses the [`systemd-coredump`](https://www.freedesktop.org/software/systemd/man/systemd-coredump.html) service.
 
 ## Design
 
@@ -13,18 +18,19 @@ This project implements REST API for accessing coredumps in Kubernetes cluster.
 - Command line utility `koredumpctl` that uses the REST API. Automatically installed in OCP to `/usr/local/bin/koredumpctl` with Kubernetes init container.
 - Note that in OCP core dumps are deleted by default after 3 days (see `systemd-tmpfiles --cat-config | grep core`).
 - Collect all coredumps in cluster by default. Limit to predefined namespaces by setting `filter.namespaceRegex` variable when installing with Helm charts.
+- Token authentication for REST API. Server uses [TokenReview](https://kubernetes.io/docs/reference/access-authn-authz/authentication/) to verify the token.
 
 ## Limitations
 
 - Red Hat OCP `privileged` [Security Context Constraint (SCC)](https://docs.openshift.com/container-platform/4.9/authentication/managing-security-context-constraints.html) is needed.
-- Optional hardcoded token authentication (`adminToken` in `values.yaml`).
 - In-cluster traffic is unencrypted HTTP.
 - Simple implementation with python3.
 - Hard requirement on systemd-coredump, core files are processed from `/var/lib/systemd/coredump` directory only.
   Note that if `core_pattern` is set e.g. to `/tmp/core` or similar, the cores are written to container filesystem, and not visible via this tool.
 - Core file deletion not (yet) possible. (Host paths are read-only mounted into containers)
 - REST API can return errors during installation and upgrade, when the koredump PODs are being terminated or created.
-- systemd-coredump by default limits core size to maximum 2GB, larger core files are truncated. Increase the limit by setting for example `ExternalSizeMax=32G` in /etc/systemd/coredump.conf (or add conf file in `/etc/systemd/coredump.conf.d/`)
+- systemd-coredump by default limits core size to maximum 2GB, larger core files are truncated.
+  Increase the limit by setting for example `ExternalSizeMax=32G` in /etc/systemd/coredump.conf (or add conf file in `/etc/systemd/coredump.conf.d/`).
 
 ## API Documentation
 
@@ -35,7 +41,7 @@ JSON list of cores (metadata) available in cluster.
 <details>
 <summary>Example</summary>
 <pre>
-bash-5.1$ curl -fsS koreapi/apiv1/cores | jq
+bash-5.1$ curl -fsS -H "Authorization: Bearer $token" koreapi/apiv1/cores | jq
 [
   {
     "ARCH": "x86_64",
@@ -63,7 +69,7 @@ JSON metadata of single core file, identified by kubernetes node name, and core 
 <details>
 <summary>Example</summary>
 <pre>
-bash-5.1$ curl -fsS koreapi/apiv1/cores/metadata/ocp-example/core.example.9999.f1c1b6957ac9436d9113a86c8c905508.141241.1642081018000000.lz4 | jq
+bash-5.1$ curl -fsS -H "Authorization: Bearer $token" koreapi/apiv1/cores/metadata/ocp-example/core.example.9999.f1c1b6957ac9436d9113a86c8c905508.141241.1642081018000000.lz4 | jq
 {
   "ARCH": "x86_64
   "COREDUMP_CMDLINE": "/usr/bin/example -a -b -c",
@@ -86,7 +92,7 @@ Download core file, identified by kubernetes node name, and core file ID.
 <details>
 <summary>Example</summary>
 <pre>
-bash-5.1$ curl -fvsS -O koreapi/apiv1/cores/download/ocp-example/core.example.9999.f1c1b6957ac9436d9113a86c8c905508.141241.1642081018000000.lz4
+bash-5.1$ curl -fvsS -O -H "Authorization: Bearer $token" koreapi/apiv1/cores/download/ocp-example/core.example.9999.f1c1b6957ac9436d9113a86c8c905508.141241.1642081018000000.lz4
 * Connected to koreapi (172.30.199.84) port 80 (#0)
 > GET /apiv1/cores/download/ocp-example/core.example.9999.f1c1b6957ac9436d9113a86c8c905508.141241.1642081018000000.lz4 HTTP/1.1
 > Host: koreapi
@@ -109,11 +115,6 @@ bash-5.1$ curl -fvsS -O koreapi/apiv1/cores/download/ocp-example/core.example.99
 </details>
 
 ## Install and run in Red Hat OCP
-
-Generate coredump (should be then visible in `coredumpctl` output):
-```bash
-kubectl run -it segfaulter --image=quay.io/icdh/segfaulter --restart=Never
-```
 
 Install (in Red Hat OCP as `core` user):
 ```bash
@@ -175,10 +176,10 @@ helm install koredump charts/koredump/
 watch kubectl get all
 ```
 
-Run API servers locally, for example in Fedora:
+Run API servers locally without Kubernetes, for example in Fedora:
 ```bash
-USE_TOKENS=0 FLASK_DEBUG=1 FLASK_RUN_PORT=5001 DAEMONSET=1 flask run
-USE_TOKENS=0 FLASK_DEBUG=1 FLASK_RUN_PORT=5000 KOREDUMP_DAEMONSET_PORT=5001 DAEMONSET=0 FAKE_K8S=1 flask run
+NO_TOKENS=1 FLASK_ENV=development PORT=5001 DAEMONSET=1 FAKE_K8S=1 gunicorn --access-logfile=- app
+NO_TOKENS=1 FLASK_ENV=development PORT=5000 KOREDUMP_DAEMONSET_PORT=5001 DAEMONSET=0 FAKE_K8S=1 gunicorn --access-logfile=- app
 ```
 
 ## Links
