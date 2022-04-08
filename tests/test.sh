@@ -86,11 +86,11 @@ function test_core_metadata() {
 		printf "%s\n" "${red}Error: missing JSON metadata for core${reset}" >&2
 		exit 1
 	fi
-	namespace=$(echo "$core_js" | jq -r '.namespace')
-	pod=$(echo "$core_js" | jq -r '.pod')
-	image_name=$(echo "$core_js" | jq -r '.image_name')
-	signal_name=$(echo "$core_js" | jq -r '.COREDUMP_SIGNAL_NAME')
-	comm=$(echo "$core_js" | jq -r '.COREDUMP_COMM')
+	namespace=$(jq -r '.namespace' <<<"$core_js")
+	pod=$(jq -r '.pod' <<<"$core_js")
+	image_name=$(jq -r '.image_name' <<<"$core_js")
+	signal_name=$(jq -r '.COREDUMP_SIGNAL_NAME' <<<"$core_js")
+	comm=$(jq -r '.COREDUMP_COMM' <<<"$core_js")
 	if [ "$namespace" != "$project" ]; then
 		printf "%s\n" "${red}Error: incorrect namespace: '${namespace}' != '${project}'${reset}" >&2
 		exit 1
@@ -226,7 +226,7 @@ function run_test() {
 	delete_coretest_pod || exit
 
 	expect_core="true"
-	if [ "$namespaceRegex" ] && ! echo "$project" | grep -q -E "^${namespaceRegex}$"; then
+	if [ "$namespaceRegex" ] && ! grep -q -E "^${namespaceRegex}$" <<<"$project"; then
 		expect_core=""
 	fi
 

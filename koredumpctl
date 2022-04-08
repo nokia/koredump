@@ -147,7 +147,7 @@ function cmd_list {
 	if [ -z "$js" ]; then return 1; fi
 	if [ "$output" = "json" ]; then
 		if [ "$flag_1" ]; then
-			echo "$js" | jq -r '.[-1]'
+			jq -r '.[-1]' <<<"$js"
 			return
 		else
 			printf "%s\n" "$js"
@@ -155,7 +155,7 @@ function cmd_list {
 		fi
 	fi
 	local count
-	count=$(echo "$js" | jq -r 'length') || return
+	count=$(jq -r 'length' <<<"$js") || return
 	if [ "$count" = '0' ]; then
 		printf "%s\n" "${yellow}Nothing found.${reset}" >&2
 		return 0
@@ -170,9 +170,9 @@ function cmd_list {
 		+ "  \(bold)Signal:\(reset) \(.COREDUMP_SIGNAL_NAME // "") (\(.COREDUMP_SIGNAL // ""))\n"
 		+ "  \(bold)Timestamp:\(reset) \(.COREDUMP_TIMESTAMP // "")"'
 	if [ "$flag_1" ]; then
-		echo "$js" | jq -r ".[-1] | $jq_cmd"
+		jq -r ".[-1] | $jq_cmd" <<<"$js"
 	else
-		echo "$js" | jq -r ".[] | $jq_cmd"
+		jq -r ".[] | $jq_cmd" <<<"$js"
 	fi
 }
 
@@ -199,7 +199,7 @@ function get_core {
 	# shellcheck disable=SC2086
 	js=$(curl --proxy "" $verbose -A "$curl_agent" --retry 3 -f -s -S -H "$token_header" \
 		"${server}/apiv1/cores/metadata/${node}/${core_id}")
-	echo "$js" | jq >"$metafile"
+	jq <<<"$js" >"$metafile"
 	size=$(stat -c "%s" "$metafile")
 	if [ "$size" = "0" ]; then
 		rm "$metafile" || true
@@ -209,7 +209,7 @@ function get_core {
 		printf "%s\n" "${green}${metafile} metadata ${size} kB.${reset}"
 	fi
 
-	if [ "$flag_d" ] && echo "$core_id" | grep -q -e '.lz4$' -e '.xz$' -e '.zst$'; then
+	if [ "$flag_d" ] && grep -q -e '.lz4$' -e '.xz$' -e '.zst$' <<<"$core_id"; then
 		local core_id_d="$core_id"
 		core_id_d="${core_id_d%.lz4}"
 		core_id_d="${core_id_d%.xz}"
@@ -244,14 +244,14 @@ function cmd_get {
 	if [ "$flag_1" ]; then
 		local js count line
 		js=$(cmd_list "json") || return
-		count=$(echo "$js" | jq -r 'length')
+		count=$(jq -r 'length' <<<"$js")
 		if [ "$count" = '0' ]; then
 			printf "%s\n" "${yellow}Nothing found.${reset}" >&2
 			return 0
 		fi
-		line=$(echo "$js" | jq -r '.node + ";" + .id')
-		node=$(echo "$line" | cut -d';' -f1)
-		core_id=$(echo "$line" | cut -d';' -f2-)
+		line=$(jq -r '.node + ";" + .id' <<<"$js")
+		node=$(cut -d';' -f1 <<<"$line")
+		core_id=$(cut -d';' -f2- <<<"$line")
 		if [ -z "$node" ] || [ -z "$core_id" ]; then
 			printf "%s\n" "${red}Error: unable to detect node name and core ID of latest core${reset}" >&2
 			exit 1
@@ -260,11 +260,11 @@ function cmd_get {
 		local js
 		local failcnt=0
 		js=$(cmd_list "json") || return
-		for line in $(echo "$js" | jq -r '.[] | .node + ";" + .id + ";" + .namespace + ";" + .pod'); do
-			node=$(echo "$line" | cut -d';' -f1)
-			core_id=$(echo "$line" | cut -d';' -f2)
-			namespace=$(echo "$line" | cut -d';' -f3)
-			pod=$(echo "$line" | cut -d';' -f4)
+		for line in $(jq -r '.[] | .node + ";" + .id + ";" + .namespace + ";" + .pod' <<<"$js"); do
+			node=$(cut -d';' -f1 <<<"$line")
+			core_id=$(cut -d';' -f2 <<<"$line")
+			namespace=$(cut -d';' -f3 <<<"$line")
+			pod=$(cut -d';' -f4 <<<"$line")
 			if [ "$flag_n" ] && [ "$namespace" != "$flag_n" ]; then
 				continue
 			fi
@@ -289,7 +289,7 @@ function cmd_get {
 		echo "Error: missing core ID" >&2
 		return 1
 	fi
-	if echo "$core_id" | grep -q -F -e "/"; then
+	if grep -q -F -e "/" <<<"$core_id"; then
 		echo "Error: invalid core ID" >&2
 		return
 	fi
@@ -319,7 +319,7 @@ function cmd_status {
 	echo
 	# shellcheck disable=SC2086
 	js=$(curl --proxy "" $verbose -A "$curl_agent" --retry 3 -f -s -S -H "$token_header" "${server}/apiv1/cores")
-	core_count=$(echo "$js" | jq -r 'length' 2>/dev/null)
+	core_count=$(jq -r 'length' <<<"$js" 2>/dev/null)
 	printf "%s %s\n\n" "${bold}Core count in cluster:${reset}" "$core_count"
 	printf "%s %s\n\n" "${bold}$(basename "$0") version:${reset}" "$version"
 	if [ "$HELM_CHART_URL" ]; then
@@ -346,7 +346,7 @@ function cmd_status {
 	fi
 	printf "%s\n" "${bold}/proc/sys/kernel/core_pattern [HOSTNAME=${HOSTNAME}]:${reset}"
 	read -r core_pattern </proc/sys/kernel/core_pattern
-	if echo "$core_pattern" | grep -q "^|/usr/lib/systemd/systemd-coredump"; then
+	if grep -q "^|/usr/lib/systemd/systemd-coredump" <<<"$core_pattern"; then
 		printf "  %s\n" "${green}${core_pattern}${reset}"
 	else
 		printf "  %s\n" "$core_pattern"
