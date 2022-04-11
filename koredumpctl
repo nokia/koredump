@@ -42,7 +42,14 @@ fi
 curl_agent=$(curl --version | head -1 | cut -d ' ' -f1-2 | tr ' ' '/')
 curl_agent+=" koredumpctl/${version}"
 
+kubectl=kubectl
+if type oc &>/dev/null; then
+	# Prefer Red Hat "oc" over "kubectl", assume cluster is OCP.
+	kubectl=oc
+fi
+
 if [ "$KUBERNETES_SERVICE_HOST" ]; then
+	# In-cluster execution.
 	server="http://koreapi.koredump.svc.cluster.local"
 else
 	server="http://127.0.0.1:5000"
@@ -83,7 +90,7 @@ function kubectl_port_fwd {
 	if [ "$KUBERNETES_SERVICE_HOST" ]; then
 		return 0
 	fi
-	if ! type kubectl &>/dev/null; then
+	if ! type "$kubectl" &>/dev/null; then
 		return 0
 	fi
 	# Pick random port, to allow multiple users to use this tool concurrently.
@@ -112,13 +119,13 @@ function kubectl_port_fwd {
 	local koredump_ns=$(koredump_namespace)
 	if [ -z "$koredump_ns" ]; then koredump_ns="koredump"; fi
 	# shellcheck disable=SC2155
-	local koredump_pod=$(kubectl get pods --namespace "$koredump_ns" \
+	local koredump_pod=$($kubectl get pods --namespace "$koredump_ns" \
 		-l "app.kubernetes.io/name=koredump,app.kubernetes.io/instance=koredump,koredump.service=1" \
 		-o jsonpath="{.items[0].metadata.name}" 2>/dev/null)
 	if [ -z "$koredump_pod" ]; then
 		return 0
 	fi
-	kubectl --namespace "$koredump_ns" port-forward "$koredump_pod" "$port":5000 >/dev/null &
+	$kubectl --namespace "$koredump_ns" port-forward "$koredump_pod" "$port":5000 >/dev/null &
 	export port_fwd_pid="$!"
 	if [ -z "$port_fwd_pid" ]; then
 		return 0
@@ -313,9 +320,9 @@ function cmd_status {
 	printf "%s\n" "${bold}helm status:${reset}"
 	helm -n "$koredump_ns" list
 	printf "\n%s\n" "${bold}REST API pod status:${reset}"
-	kubectl -n "$koredump_ns" get pod -o wide -l koredump.service=1
+	$kubectl -n "$koredump_ns" get pod -o wide -l koredump.service=1
 	printf "\n%s\n" "${bold}DaemonSet pod status:${reset}"
-	kubectl -n "$koredump_ns" get pod -o wide -l koredump.daemonset=1 --sort-by='{.spec.nodeName}'
+	$kubectl -n "$koredump_ns" get pod -o wide -l koredump.daemonset=1 --sort-by='{.spec.nodeName}'
 	echo
 	# shellcheck disable=SC2086
 	js=$(curl --proxy "" $verbose -A "$curl_agent" --retry 3 -f -s -S -H "$token_header" "${server}/apiv1/cores")
