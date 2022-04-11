@@ -39,6 +39,6 @@ $ koredumpctl list
 
 Uninstall:
 ```bash
-helm uninstall koredump
+helm -n koredump uninstall koredump
 rm /usr/local/bin/koredumpctl
 ```
