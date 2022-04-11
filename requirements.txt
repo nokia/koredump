@@ -26,5 +26,5 @@ rsa==4.8
 six==1.16.0
 systemd-python==234
 urllib3==1.26.9
-websocket-client==1.3.1
+websocket-client==1.3.2
 Werkzeug==2.1.1
