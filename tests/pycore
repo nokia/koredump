@@ -4,7 +4,8 @@
 # SPDX-License-Identifier: MIT
 #
 # This python script allocates several gigabytes of memory and generates core
-# dump by causing SIGSEGV.
+# dump by causing SIGSEGV. Idea is to test that core dump collection and
+# tooling work correctly when core size is large.
 
 import ctypes
 import mmap
@@ -23,23 +24,20 @@ with open("/proc/meminfo") as f:
 
 print(f"MemAvailable: {availGB}GB", flush=True)
 
-if availGB <= 1:
-    print("Error: not enough memory available", file=sys.stderr)
-    sys.exit(1)
+if availGB > 1:
+    # Try not to consume all available memory to avoid OOM.
+    max_mem = min(max_mem, availGB - 1)
 
-# Try not to consume all available memory to avoid OOM.
-max_mem = min(max_mem, availGB - 1)
-
-print(f"Allocating {max_mem}GB memory", flush=True)
-mmaps = []
-while len(mmaps) < max_mem:
-    flags = mmap.MAP_ANONYMOUS | mmap.MAP_PRIVATE
-    m = mmap.mmap(-1, 1024 ** 3, flags)
-    print(f"- Writing {int(len(m)/1024**3)}GB...")
-    for idx in range(0, len(m), 4096):
-        m[idx] = 1
-    mmaps.append(m)
-print()
+    print(f"Allocating {max_mem}GB memory", flush=True)
+    mmaps = []
+    while len(mmaps) < max_mem:
+        flags = mmap.MAP_ANONYMOUS | mmap.MAP_PRIVATE
+        m = mmap.mmap(-1, 1024 ** 3, flags)
+        print(f"- Writing {int(len(m)/1024**3)}GB...")
+        for idx in range(0, len(m), 4096):
+            m[idx] = 1
+        mmaps.append(m)
+    print()
 
 print("/proc/self/smaps_rollup:", flush=True)
 with open("/proc/self/smaps_rollup") as f:
