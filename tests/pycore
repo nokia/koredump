@@ -21,6 +21,7 @@ with open("/proc/meminfo") as f:
     for line in f:
         if line.startswith("MemAvailable:"):
             availGB = round(int(line.split()[1]) / 1024 ** 2)
+            break
 
 print(f"MemAvailable: {availGB}GB", flush=True)
 
