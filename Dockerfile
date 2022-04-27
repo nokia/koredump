@@ -5,7 +5,7 @@
 FROM registry.access.redhat.com/ubi8/ubi:8.5 AS base
 MAINTAINER Nokia
 
-ARG VERSION=0.3.4
+ARG VERSION=0.4.0
 
 # Required OpenShift Labels
 LABEL name="koredump" \

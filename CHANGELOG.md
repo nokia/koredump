@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.4.0] - 2022-04-27
 ### Changed
 - REST API access now requires valid Kubernetes token. `koredumpctl` tool can take it from `oc whoami --show-token` command output in Red Hat OCP.
 - Switch container base image to Red Hat UBI8. Container build is reworked and python dependencies now installed with pip. Container images are now built to amd64, arm64, ppc64le and s390x.
@@ -42,7 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release at GitHub.
 
-[unreleased]: https://github.com/nokia/koredump/compare/0.3.4...HEAD
+[unreleased]: https://github.com/nokia/koredump/compare/0.4.0...HEAD
+[0.4.0]: https://github.com/nokia/koredump/compare/0.3.4...0.4.0
 [0.3.4]: https://github.com/nokia/koredump/compare/0.3.3...0.3.4
 [0.3.3]: https://github.com/nokia/koredump/compare/0.3.2...0.3.3
 [0.3.2]: https://github.com/nokia/koredump/compare/koredump-0.3.1...0.3.2
