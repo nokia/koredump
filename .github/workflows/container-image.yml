@@ -28,7 +28,7 @@ jobs:
           platforms: amd64,arm64,ppc64le,s390x
 
       - name: Log in to the Container registry
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
