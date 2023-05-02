@@ -9,6 +9,7 @@ Monitors for new core files in /var/lib/systemd/coredump/
 Generates /koredump/index.json with data on available cores.
 """
 
+import base64
 import json
 import logging
 import os
@@ -143,6 +144,8 @@ class KoreMonitor(pyinotify.ProcessEvent):
                 entry[k] = str(v.timestamp)
             elif isinstance(v, datetime):
                 entry[k] = v.isoformat() + "Z"
+            elif isinstance(v, bytes):
+                entry[k] = base64.b64encode(v).decode('ascii')
             elif not isinstance(v, (str, int)):
                 self.logger.error(k, v)
         return entry
