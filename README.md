@@ -1,3 +1,7 @@
+# Koredump is not maintained anymore
+
+The project is not maintained anymore and goes into read only mode.
+
 # Coredump REST API for Kubernetes
 
 koredump enables easy access to core dumps in a Kubernetes cluster.
